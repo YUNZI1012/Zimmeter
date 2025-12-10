@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/axios';
-import { Activity } from 'lucide-react';
+import { Activity, Download } from 'lucide-react';
 
 interface User {
   id: number;
@@ -36,6 +36,13 @@ type ModeKey = (typeof MODES)[number]['key'];
 export const AdminWorkLogCharts = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [mode, setMode] = useState<ModeKey>('day');
+  
+  // CSVダウンロード用の期間state
+  // デフォルト: 今月1日 ～ 今日
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const [downloadStartDate, setDownloadStartDate] = useState(firstDay.toISOString().slice(0, 10));
+  const [downloadEndDate, setDownloadEndDate] = useState(today.toISOString().slice(0, 10));
 
   const { data: users } = useQuery<User[]>({
     queryKey: ['users'],
@@ -60,6 +67,36 @@ export const AdminWorkLogCharts = () => {
   });
 
   const totalMinutesAll = stats?.byCategory.reduce((sum, c) => sum + c.minutes, 0) ?? 0;
+
+  const handleDownload = async () => {
+    if (!effectiveUserId) return;
+    try {
+      // 選択中のユーザーのUIDを取得
+      const targetUser = users?.find(u => u.id === effectiveUserId);
+      if (!targetUser) return;
+
+      const res = await api.get('/export/csv', {
+        params: {
+          start: downloadStartDate,
+          end: downloadEndDate,
+          targetUid: targetUser.uid,
+        },
+        responseType: 'blob', // バイナリとして受け取る
+      });
+
+      // ブラウザでダウンロード発火
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `work_logs_${targetUser.uid}_${downloadStartDate}_${downloadEndDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('CSVダウンロードに失敗しました');
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
@@ -104,15 +141,15 @@ export const AdminWorkLogCharts = () => {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-rows-2 gap-2 p-4 min-h-0">
-        <div className="bg-slate-50 rounded-lg border border-slate-100 p-3 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
+      <div className="flex-1 grid grid-rows-2 gap-2 p-4 min-h-0 overflow-y-auto">
+        <div className="bg-slate-50 rounded-lg border border-slate-100 p-3 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between mb-2 shrink-0">
             <h4 className="text-sm font-semibold text-slate-700">時間推移</h4>
             <span className="text-xs text-slate-400">
               合計 {totalMinutesAll} 分
             </span>
           </div>
-          <div className="h-[140px] flex items-center justify-center text-xs text-slate-400">
+          <div className="flex-1 flex items-center justify-center text-xs text-slate-400 min-h-0">
             {isLoading && <span>読み込み中...</span>}
             {!isLoading && stats && stats.timeSeries.length === 0 && <span>データがありません</span>}
             {!isLoading && stats && stats.timeSeries.length > 0 && (
@@ -123,11 +160,11 @@ export const AdminWorkLogCharts = () => {
           </div>
         </div>
 
-        <div className="bg-slate-50 rounded-lg border border-slate-100 p-3 overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
+        <div className="bg-slate-50 rounded-lg border border-slate-100 p-3 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between mb-2 shrink-0">
             <h4 className="text-sm font-semibold text-slate-700">業務項目別 割合</h4>
           </div>
-          <div className="h-[140px] flex items-center justify-center text-xs text-slate-400">
+          <div className="flex-1 flex items-center justify-center text-xs text-slate-400 min-h-0">
             {isLoading && <span>読み込み中...</span>}
             {!isLoading && stats && stats.byCategory.length === 0 && <span>データがありません</span>}
             {!isLoading && stats && stats.byCategory.length > 0 && (
@@ -135,6 +172,36 @@ export const AdminWorkLogCharts = () => {
                 {JSON.stringify(stats.byCategory, null, 2)}
               </pre>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* CSV Download Area */}
+      <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+        <div className="flex flex-col gap-2">
+          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">CSVダウンロード</h4>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={downloadStartDate}
+              onChange={(e) => setDownloadStartDate(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700"
+            />
+            <span className="text-gray-400">～</span>
+            <input
+              type="date"
+              value={downloadEndDate}
+              onChange={(e) => setDownloadEndDate(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700"
+            />
+            <button
+              onClick={handleDownload}
+              className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors ml-auto"
+              title="CSVダウンロード"
+            >
+              <Download size={16} />
+              ダウンロード
+            </button>
           </div>
         </div>
       </div>

@@ -50,8 +50,9 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
       showToast('設定を保存しました', 'success');
       onClose();
     },
-    onError: () => {
-      showToast('設定の保存に失敗しました', 'error');
+    onError: (error: any) => {
+      const msg = error.response?.data?.details || '設定の保存に失敗しました';
+      showToast(msg, 'error');
     }
   });
 
@@ -72,8 +73,9 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
       setNewLabel('');
       showToast('カテゴリを作成しました', 'success');
     },
-    onError: () => {
-        showToast('カテゴリの作成に失敗しました', 'error');
+    onError: (error: any) => {
+        const msg = error.response?.data?.details || error.response?.data?.error || 'カテゴリの作成に失敗しました';
+        showToast(msg, 'error');
     }
   });
 

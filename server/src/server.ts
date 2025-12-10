@@ -16,6 +16,10 @@ app.use(express.json());
 app.use('/api', statusGuard);
 app.use('/api', router);
 
+console.log('Routes mounted at /api');
+
+app.post('/api/test', (req, res) => res.json({ message: 'Direct route works' }));
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });

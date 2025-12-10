@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from './db';
 import { UserStatus, Role, CategoryType } from '@prisma/client';
 
+console.log('Loading routes_v2...');
+
 const router = Router();
 
 // --- Helper: Get User from Request ---
@@ -126,8 +128,9 @@ router.post('/categories', async (req: Request, res: Response) => {
       },
     });
     res.json(category);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to create category' });
+  } catch (error: any) {
+    console.error('[Create Category Error]:', error);
+    res.status(500).json({ error: 'Failed to create category', details: error.message });
   }
 });
 
@@ -448,5 +451,7 @@ router.post('/settings', async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to save settings' });
   }
 });
+
+console.log('Routes defined in v2:', router.stack.length);
 
 export default router;

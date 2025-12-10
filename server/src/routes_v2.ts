@@ -352,6 +352,146 @@ router.get('/logs/monitor', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/logs/stats (Admin Only)
+// 特定ユーザーの直近日/週/月ごとの集計とカテゴリ別割合を返す
+router.get('/logs/stats', async (req: Request, res: Response) => {
+  try {
+    const currentUser = getUser(req);
+    if (currentUser.role !== 'ADMIN') {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+
+    const { userId, mode } = req.query;
+
+    if (!userId || !mode) {
+      return res.status(400).json({ error: 'Missing userId or mode' });
+    }
+
+    const modeStr = String(mode);
+    if (!['day', 'week', 'month'].includes(modeStr)) {
+      return res.status(400).json({ error: 'Invalid mode' });
+    }
+
+    const now = new Date();
+    let rangeStart = new Date(now);
+    let bucketCount = 0;
+
+    if (modeStr === 'day') {
+      // 直近30日
+      rangeStart.setDate(rangeStart.getDate() - 29);
+      rangeStart.setHours(0, 0, 0, 0);
+      bucketCount = 30;
+    } else if (modeStr === 'week') {
+      // 直近12週（現在の週を含む）
+      // 週の開始を月曜とみなす
+      const day = rangeStart.getDay();
+      const diffToMonday = (day + 6) % 7; // 0:日 -> 6, 1:月 -> 0 ...
+      rangeStart.setDate(rangeStart.getDate() - diffToMonday);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeStart.setDate(rangeStart.getDate() - 7 * 11);
+      bucketCount = 12;
+    } else {
+      // month: 直近12ヶ月（今月を含む）
+      rangeStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth() - 11, 1, 0, 0, 0, 0);
+      bucketCount = 12;
+    }
+
+    // 対象ユーザーのログを取得
+    const logs = await prisma.workLog.findMany({
+      where: {
+        userId: Number(userId),
+        startTime: {
+          gte: rangeStart,
+          lte: now,
+        },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+
+    // バケット初期化
+    type Bucket = { label: string; totalSeconds: number };
+    const buckets: Bucket[] = [];
+
+    if (modeStr === 'day') {
+      for (let i = 0; i < bucketCount; i++) {
+        const d = new Date(rangeStart);
+        d.setDate(rangeStart.getDate() + i);
+        const label = d.toISOString().slice(0, 10); // YYYY-MM-DD
+        buckets.push({ label, totalSeconds: 0 });
+      }
+    } else if (modeStr === 'week') {
+      for (let i = 0; i < bucketCount; i++) {
+        const d = new Date(rangeStart);
+        d.setDate(rangeStart.getDate() + i * 7);
+        const year = d.getFullYear();
+        const weekIndex = i + 1; // 直近12週の中でのインデックス
+        const label = `${year}-W${String(weekIndex).padStart(2, '0')}`;
+        buckets.push({ label, totalSeconds: 0 });
+      }
+    } else {
+      for (let i = 0; i < bucketCount; i++) {
+        const d = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + i, 1);
+        const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        buckets.push({ label, totalSeconds: 0 });
+      }
+    }
+
+    const byCategory: Record<string, number> = {};
+
+    for (const log of logs) {
+      const start = log.startTime;
+      const durationSec = log.duration ?? (log.endTime ? Math.floor((log.endTime.getTime() - log.startTime.getTime()) / 1000) : 0);
+      if (!durationSec) continue;
+
+      let bucketIndex = -1;
+
+      if (modeStr === 'day') {
+        const diffDays = Math.floor((start.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0 && diffDays < bucketCount) {
+          bucketIndex = diffDays;
+        }
+      } else if (modeStr === 'week') {
+        const diffDays = Math.floor((start.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
+        const diffWeeks = Math.floor(diffDays / 7);
+        if (diffWeeks >= 0 && diffWeeks < bucketCount) {
+          bucketIndex = diffWeeks;
+        }
+      } else {
+        const year = start.getFullYear();
+        const month = start.getMonth();
+        const startYear = rangeStart.getFullYear();
+        const startMonth = rangeStart.getMonth();
+        const diffMonths = (year - startYear) * 12 + (month - startMonth);
+        if (diffMonths >= 0 && diffMonths < bucketCount) {
+          bucketIndex = diffMonths;
+        }
+      }
+
+      if (bucketIndex >= 0) {
+        buckets[bucketIndex].totalSeconds += durationSec;
+      }
+
+      const catName = log.categoryNameSnapshot || 'Unknown';
+      byCategory[catName] = (byCategory[catName] || 0) + durationSec;
+    }
+
+    const timeSeries = buckets.map((b) => ({
+      label: b.label,
+      totalMinutes: Math.round(b.totalSeconds / 60),
+    }));
+
+    const byCategoryArr = Object.entries(byCategory).map(([categoryName, totalSeconds]) => ({
+      categoryName,
+      minutes: Math.round(totalSeconds / 60),
+    }));
+
+    res.json({ timeSeries, byCategory: byCategoryArr });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 
 // GET /api/export/csv
 // 全データのCSVエクスポート

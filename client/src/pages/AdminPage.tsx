@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { UserList } from '../components/Admin/UserList';
 import { MonitorTable } from '../components/Admin/MonitorTable';
-import { ArrowLeft, LayoutDashboard, Settings } from 'lucide-react';
+import { ArrowLeft, LayoutDashboard } from 'lucide-react';
+import { AdminWorkLogCharts } from '../components/Admin/AdminWorkLogCharts';
 
 interface AdminPageProps {
   onBack: () => void;
 }
 
 export const AdminPage = ({ onBack }: AdminPageProps) => {
+  const [rightTab, setRightTab] = useState<'monitor' | 'graph'>('monitor');
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       <header className="bg-slate-900 text-white shadow-lg px-6 py-4 sticky top-0 z-20">
@@ -36,7 +39,31 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
             <UserList />
           </div>
           <div className="h-full overflow-hidden flex flex-col">
-            <MonitorTable />
+            <div className="border-b border-gray-200 mb-2 flex items-center justify-between px-2 pt-1">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRightTab('monitor')}
+                  className={`${rightTab === 'monitor' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'} px-2 pb-1 text-sm font-medium`}
+                >
+                  モニター
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRightTab('graph')}
+                  className={`${rightTab === 'graph' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-gray-700'} px-2 pb-1 text-sm font-medium`}
+                >
+                  グラフ
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              {rightTab === 'monitor' ? (
+                <MonitorTable />
+              ) : (
+                <AdminWorkLogCharts />
+              )}
+            </div>
           </div>
         </div>
       </main>

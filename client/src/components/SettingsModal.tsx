@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { Category } from '../lib/constants';
-import { getCategoryColor } from '../lib/constants';
+import type { Category, ColorPreset } from '../lib/constants';
+import { getCategoryColor, COLOR_PRESETS } from '../lib/constants';
 import { api } from '../lib/axios';
-import { X, ArrowUp, ArrowDown, Plus, Trash2, Pencil, Lock } from 'lucide-react';
+import { X, ArrowUp, ArrowDown, Plus, Trash2, Pencil, Lock, Check } from 'lucide-react';
 import { useUserStatus } from '../hooks/useUserStatus';
 import { useToast } from '../context/ToastContext';
 
@@ -29,6 +29,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
   // Create/Edit state
   const [targetList, setTargetList] = useState<'primary' | 'secondary'>('secondary');
   const [newLabel, setNewLabel] = useState('');
+  const [selectedPreset, setSelectedPreset] = useState<ColorPreset>(COLOR_PRESETS[0]);
   const [editCategory, setEditCategory] = useState<Category | null>(null);
 
   // --- API Mutations ---
@@ -51,7 +52,14 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
 
   // 2. Create Category
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; type: 'SYSTEM' | 'CUSTOM'; priority?: number; defaultList?: 'PRIMARY' | 'SECONDARY' | 'HIDDEN' }) => {
+    mutationFn: async (data: { 
+      name: string; 
+      type: 'SYSTEM' | 'CUSTOM'; 
+      priority?: number; 
+      defaultList?: 'PRIMARY' | 'SECONDARY' | 'HIDDEN';
+      bgColor?: string;
+      borderColor?: string;
+    }) => {
       return api.post('/categories', data);
     },
     onSuccess: (res) => {
@@ -64,6 +72,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
         setSecondary(prev => [...prev, newId]);
       }
       setNewLabel('');
+      setSelectedPreset(COLOR_PRESETS[0]);
       showToast('カテゴリを作成しました', 'success');
     },
     onError: (error: any) => {
@@ -74,13 +83,20 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
 
   // 3. Update Category
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: number; name?: string; defaultList?: 'PRIMARY' | 'SECONDARY' | 'HIDDEN' }) => {
+    mutationFn: async (data: { 
+      id: number; 
+      name?: string; 
+      defaultList?: 'PRIMARY' | 'SECONDARY' | 'HIDDEN';
+      bgColor?: string;
+      borderColor?: string;
+    }) => {
       return api.put(`/categories/${data.id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       setEditCategory(null);
       setNewLabel('');
+      setSelectedPreset(COLOR_PRESETS[0]);
       showToast('カテゴリを更新しました', 'success');
     },
     onError: () => {
@@ -179,7 +195,12 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
     if (!newLabel.trim()) return;
 
     if (editCategory) {
-      updateMutation.mutate({ id: editCategory.id, name: newLabel.trim() });
+      updateMutation.mutate({ 
+        id: editCategory.id, 
+        name: newLabel.trim(),
+        bgColor: selectedPreset.bg,
+        borderColor: selectedPreset.border
+      });
     } else {
       // AdminならSYSTEM、それ以外はCUSTOM
       const type = isAdmin ? 'SYSTEM' : 'CUSTOM';
@@ -192,7 +213,9 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
         name: newLabel.trim(), 
         type, 
         priority: maxPriority + 10,
-        defaultList
+        defaultList,
+        bgColor: selectedPreset.bg,
+        borderColor: selectedPreset.border
       });
     }
   };
@@ -200,6 +223,10 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
   const handleEditClick = (cat: Category) => {
     setEditCategory(cat);
     setNewLabel(cat.name);
+    
+    // Find matching preset or default to first
+    const preset = COLOR_PRESETS.find(p => p.bg === cat.bgColor) || COLOR_PRESETS[0];
+    setSelectedPreset(preset);
   };
 
   const handleDeleteClick = (id: number) => {
@@ -211,6 +238,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
   const handleCancelEdit = () => {
     setEditCategory(null);
     setNewLabel('');
+    setSelectedPreset(COLOR_PRESETS[0]);
   };
 
   const handleChangeVisibility = (catId: number, type: 'primary' | 'secondary' | 'hidden') => {
@@ -241,10 +269,11 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
   // Category Map for easy lookup
   const categoryMap = categories.reduce((acc, c) => ({ ...acc, [c.id]: c }), {} as Record<number, Category>);
 
-  // Preview color
-  const { color: previewClass } = getCategoryColor(newLabel || '新規カテゴリ');
-  // 簡易的にクラスから色スタイルを生成 (Tailwindクラスをそのまま使う)
-  // getCategoryColorは { color: 'bg-blue-100 border-blue-300' } のように返す
+  // Preview color logic
+  // If we are editing/creating with a preset, show that preset.
+  const previewStyle = selectedPreset 
+    ? { className: `${selectedPreset.bg} ${selectedPreset.border} ${selectedPreset.text || 'text-gray-800'}` }
+    : { className: getCategoryColor({ name: newLabel }).color };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -283,7 +312,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                     {categories.map(cat => {
                         const isPrimary = primary.includes(cat.id);
                         const isSecondary = secondary.includes(cat.id);
-                        const { color: rowColorClass } = getCategoryColor(cat.name);
+                        const { color: rowColorClass } = getCategoryColor(cat);
                         
                         return (
                             <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
@@ -359,7 +388,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                             {primary.map((catId, index) => {
                                 const cat = categoryMap[catId];
                                 if (!cat) return null;
-                                const { color } = getCategoryColor(cat.name);
+                                const { color } = getCategoryColor(cat);
 
                                 return (
                                     <div key={catId} className="flex items-center justify-between p-2 border rounded bg-white">
@@ -396,7 +425,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                             {secondary.map((catId, index) => {
                                 const cat = categoryMap[catId];
                                 if (!cat) return null;
-                                const { color } = getCategoryColor(cat.name);
+                                const { color } = getCategoryColor(cat);
 
                                 return (
                                     <div key={catId} className="flex items-center justify-between p-2 border rounded bg-white">
@@ -451,6 +480,29 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                                 </p>
                             </div>
 
+                            {/* Color Selection */}
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">カラー設定</label>
+                                <div className="flex flex-wrap gap-2">
+                                    {COLOR_PRESETS.map((preset) => (
+                                        <button
+                                            key={preset.label}
+                                            onClick={() => setSelectedPreset(preset)}
+                                            className={`w-8 h-8 rounded-full border-2 flex items-center justify-center transition-all ${preset.bg} ${preset.border} ${
+                                                selectedPreset.label === preset.label 
+                                                ? 'ring-2 ring-blue-500 ring-offset-2 scale-110' 
+                                                : 'hover:scale-105'
+                                            }`}
+                                            title={preset.label}
+                                        >
+                                            {selectedPreset.label === preset.label && (
+                                                <Check size={14} className={preset.text || 'text-gray-800'} />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             {!editCategory && (
                                 <div>
                                     <label className="block text-sm font-bold text-gray-700 mb-2">追加先</label>
@@ -481,7 +533,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                             
                             <div className="bg-white p-3 rounded-lg border">
                                 <p className="text-xs text-gray-500 mb-2">プレビュー</p>
-                                <div className={`flex items-center justify-center p-2 rounded-xl border-2 w-full h-16 shadow-sm ${previewClass}`}>
+                                <div className={`flex items-center justify-center p-2 rounded-xl border-2 w-full h-16 shadow-sm ${previewStyle.className}`}>
                                     <span className="text-lg font-bold">{newLabel || 'カテゴリ名'}</span>
                                 </div>
                             </div>
@@ -519,11 +571,12 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                                 const isSystem = cat.type === 'SYSTEM';
                                 // Edit allowed if: (Admin) OR (Custom & User)
                                 const canEdit = isAdmin || (!isSystem);
+                                const { color: listColor } = getCategoryColor(cat);
 
                                 return (
                                     <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg bg-white">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-3 h-3 rounded-full ${getCategoryColor(cat.name).color.split(' ')[0]}`}></div>
+                                            <div className={`w-3 h-3 rounded-full ${listColor.split(' ')[0]}`}></div>
                                             <span className="font-medium">{cat.name}</span>
                                             {isSystem && <span className="text-xs bg-gray-200 text-gray-500 px-1 rounded">SYS</span>}
                                         </div>

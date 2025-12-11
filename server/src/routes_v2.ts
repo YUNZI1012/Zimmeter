@@ -112,7 +112,7 @@ router.get('/categories', async (req: Request, res: Response) => {
 router.post('/categories', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    const { name, type, priority, defaultList } = req.body;
+    const { name, type, priority, defaultList, bgColor, borderColor } = req.body;
 
     // Admin以外がSYSTEMを作成しようとしたらエラー
     if (type === 'SYSTEM' && currentUser.role !== 'ADMIN') {
@@ -126,6 +126,8 @@ router.post('/categories', async (req: Request, res: Response) => {
         createdById: currentUser.id, // SYSTEMでも作成者として残す
         priority: priority || 0,
         defaultList: defaultList || 'SECONDARY',
+        bgColor,
+        borderColor,
       },
     });
     res.json(category);
@@ -171,7 +173,7 @@ router.put('/categories/:id', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
     const { id } = req.params;
-    const { name, priority, defaultList } = req.body;
+    const { name, priority, defaultList, bgColor, borderColor } = req.body;
 
     const category = await prisma.category.findUnique({ where: { id: Number(id) } });
     if (!category) return res.status(404).json({ error: 'Category not found' });
@@ -188,6 +190,8 @@ router.put('/categories/:id', async (req: Request, res: Response) => {
     if (name !== undefined) data.name = name;
     if (priority !== undefined) data.priority = priority;
     if (defaultList !== undefined) data.defaultList = defaultList;
+    if (bgColor !== undefined) data.bgColor = bgColor;
+    if (borderColor !== undefined) data.borderColor = borderColor;
 
     const updated = await prisma.category.update({
       where: { id: Number(id) },

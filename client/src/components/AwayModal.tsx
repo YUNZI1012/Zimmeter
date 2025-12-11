@@ -21,7 +21,7 @@ export const AwayModal = ({ isOpen, onClose, logId }: AwayModalProps) => {
       const res = await api.get<Category[]>('/categories');
       return res.data.map(c => ({
         ...c,
-        ...getCategoryColor(c.name)
+        ...getCategoryColor(c)
       }));
     },
     staleTime: 1000 * 60 * 5,

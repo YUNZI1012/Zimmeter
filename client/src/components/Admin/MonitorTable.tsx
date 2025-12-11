@@ -36,7 +36,7 @@ export const MonitorTable = () => {
       // Assign colors on frontend
       return res.data.map(c => ({
         ...c,
-        ...getCategoryColor(c.name)
+        ...getCategoryColor(c)
       }));
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
@@ -68,10 +68,14 @@ export const MonitorTable = () => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {logs?.map((log) => {
-                // 簡易的に色を取得
-                const { color: bgClass } = getCategoryColor(log.categoryNameSnapshot);
+                // 簡易的に色を取得 (カテゴリが存在すればその設定を使用、なければ名前から推測)
+                const currentCat = categories?.find(c => c.name === log.categoryNameSnapshot);
+                const { color: bgClass } = getCategoryColor(currentCat || { name: log.categoryNameSnapshot });
+                
                 // bg-xxx-100 -> text-xxx-600 のような簡易変換
-                const color = bgClass.split(' ')[0].replace('bg-', 'text-').replace('-100', '-600').replace('-50', '-500').replace('slate-800', 'slate-600');
+                const color = bgClass.includes('slate-800') 
+                    ? 'text-slate-700'
+                    : bgClass.split(' ')[0].replace('bg-', 'text-').replace('-100', '-600').replace('-50', '-500');
                 
                 const isLongDuration = !log.duration && (new Date().getTime() - new Date(log.startTime).getTime()) > 1000 * 60 * 60 * 3; // 3時間以上経過
 

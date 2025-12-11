@@ -99,7 +99,7 @@ function ZimmeterApp() {
       // Assign colors on frontend
       return res.data.map(c => ({
         ...c,
-        ...getCategoryColor(c.name)
+        ...getCategoryColor(c)
       }));
     },
     enabled: !!uid, 

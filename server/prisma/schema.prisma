@@ -82,6 +82,10 @@ model Category {
   priority    Int          @default(0)     // 表示順序
   defaultList DefaultListType @default(SECONDARY) // デフォルトの表示先
 
+  // Visual Customization
+  bgColor     String?
+  borderColor String?
+
   logs        WorkLog[]
 
   @@map("categories")

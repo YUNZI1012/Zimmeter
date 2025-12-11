@@ -230,20 +230,20 @@ function ZimmeterApp() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 text-gray-800 font-sans">
         <StatusGuard />
         {/* Header */}
-        <header className="bg-white shadow px-6 py-4 flex justify-between items-center sticky top-0 z-20">
-            <div className="flex items-center gap-8">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-bold tracking-tight text-gray-700">Zimmeter</h1>
+        <header className="bg-white shadow px-4 lg:px-6 h-16 flex justify-between items-center sticky top-0 z-20 whitespace-nowrap">
+            <div className="flex items-center gap-2 lg:gap-8 overflow-hidden">
+                <div className="flex items-center gap-2 lg:gap-4 shrink-0">
+                    <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-gray-700 hidden sm:block">Zimmeter</h1>
                     <div className="flex items-center gap-2 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-500">
-                        <span>{uid}</span>
+                        <span className="truncate max-w-[100px] sm:max-w-none">{uid}</span>
                     </div>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg shrink-0">
                     <button
                         onClick={() => setActiveTab('main')}
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-colors ${
                             activeTab === 'main' 
                                 ? 'bg-white text-gray-800 shadow-sm' 
                                 : 'text-gray-500 hover:text-gray-700'
@@ -254,7 +254,7 @@ function ZimmeterApp() {
                     {userStatus?.role === 'ADMIN' && (
                         <button
                             onClick={() => setActiveTab('admin')}
-                            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                            className={`px-3 lg:px-4 py-1.5 rounded-md text-xs lg:text-sm font-medium transition-colors ${
                                 activeTab === 'admin' 
                                     ? 'bg-white text-gray-800 shadow-sm' 
                                     : 'text-gray-500 hover:text-gray-700'
@@ -266,14 +266,14 @@ function ZimmeterApp() {
                 </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-1 lg:gap-2 shrink-0">
                 <button 
                     onClick={() => setShowHistory(!showHistory)}
 
                     className={`p-2 rounded-lg hover:bg-gray-100 transition-colors ${showHistory ? 'bg-blue-50 text-blue-600' : 'text-gray-500'}`}
                     title="履歴"
                 >
-                    <History />
+                    <History size={20} />
                 </button>
                 <a 
                     href={`${api.defaults.baseURL}/export/csv`} 
@@ -282,14 +282,14 @@ function ZimmeterApp() {
                     className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                     title="CSVエクスポート"
                 >
-                    <Download />
+                    <Download size={20} />
                 </a>
                 <button 
                     onClick={() => setIsSettingsOpen(true)}
                     className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
                     title="設定"
                 >
-                    <Settings />
+                    <Settings size={20} />
                 </button>
             </div>
         </header>

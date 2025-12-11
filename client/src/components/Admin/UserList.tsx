@@ -68,8 +68,8 @@ export const UserList = () => {
   if (isLoading) return <div className="p-4">Loading users...</div>;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
+      <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center shrink-0">
         <h3 className="font-bold text-gray-700 flex items-center gap-2">
           <UserCheck size={20} />
           ユーザー管理
@@ -77,9 +77,9 @@ export const UserList = () => {
         <span className="text-xs text-gray-400">{users?.length} users</span>
       </div>
       
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-left">
-          <thead className="text-gray-500 bg-gray-50 border-b">
+      <div className="flex-1 overflow-auto min-h-0">
+        <table className="w-full text-sm text-left whitespace-nowrap">
+          <thead className="text-gray-500 bg-gray-50 border-b sticky top-0 z-10">
             <tr>
               <th className="p-3 font-medium">UID / Name</th>
               <th className="p-3 font-medium">Role</th>

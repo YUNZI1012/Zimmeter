@@ -220,7 +220,7 @@ export const AdminWorkLogCharts = () => {
         </div>
       </div>
 
-      <div className="flex-1 grid grid-rows-2 gap-2 p-4 min-h-0 overflow-y-auto">
+      <div className="flex-1 flex flex-col gap-4 p-4 min-h-0 overflow-y-auto">
         <ChartWrapper
             title="時間推移 (分)"
             previewTitle={`${userNameForTitle} - 時間推移 (分)`}
@@ -230,6 +230,7 @@ export const AdminWorkLogCharts = () => {
                 </span>
             }
             isLoading={isLoading}
+            className="flex-1 min-h-[300px]"
         >
           {isLoading && <div className="flex h-full items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
           {!isLoading && stats && stats.timeSeries.length === 0 && <div className="flex h-full items-center justify-center text-gray-400 text-xs">データがありません</div>}
@@ -262,6 +263,7 @@ export const AdminWorkLogCharts = () => {
             title="業務項目別 割合" 
             previewTitle={`${userNameForTitle} - 業務項目別 割合`}
             isLoading={isLoading}
+            className="flex-1 min-h-[300px]"
         >
           {isLoading && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
           {!isLoading && stats && stats.byCategory.length === 0 && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">データがありません</div>}

@@ -55,8 +55,8 @@ export const MonitorTable = () => {
           <span className="text-xs text-gray-400">{logs?.length} records</span>
         </div>
         
-        <div className="overflow-y-auto flex-1">
-          <table className="w-full text-sm text-left">
+        <div className="flex-1 overflow-auto min-h-0">
+          <table className="w-full text-sm text-left whitespace-nowrap">
             <thead className="text-gray-500 bg-gray-50 border-b sticky top-0 z-10">
               <tr>
                 <th className="p-3 font-medium">Time</th>

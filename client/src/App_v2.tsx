@@ -10,6 +10,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { EditLogModal } from './components/EditLogModal';
 import { LoginModal } from './components/LoginModal';
 import { StatusGuard } from './components/Common/StatusGuard';
+import { TimeDecoration } from './components/Common/TimeDecoration';
 import { useUserStatus } from './hooks/useUserStatus';
 import { useTimer } from './hooks/useTimer';
 import { AdminPage } from './pages/AdminPage';
@@ -407,6 +408,8 @@ function ZimmeterApp() {
                 </div>
             </div>
         )}
+
+        <TimeDecoration />
     </div>
   );
 }

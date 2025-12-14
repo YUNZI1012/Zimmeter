@@ -3,6 +3,7 @@ import { UserList } from '../components/Admin/UserList';
 import { MonitorTable } from '../components/Admin/MonitorTable';
 import { ArrowLeft, LayoutDashboard } from 'lucide-react';
 import { AdminWorkLogCharts } from '../components/Admin/AdminWorkLogCharts';
+import { TimeDecoration } from '../components/Common/TimeDecoration';
 
 interface AdminPageProps {
   onBack: () => void;
@@ -67,6 +68,8 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
           </div>
         </div>
       </main>
+
+      <TimeDecoration />
     </div>
   );
 };

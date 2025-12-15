@@ -53,10 +53,13 @@ async function main() {
   // Fetch created categories to use their IDs
   const categories = await prisma.category.findMany();
   
-  // Create sample logs for today
+  // Create sample logs for yesterday to ensure they are in the past and valid
   console.log('Creating sample logs...');
   const now = new Date();
-  const today9am = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 0, 0);
+  // Set to yesterday 9:00 AM
+  const startTime = new Date(now);
+  startTime.setDate(startTime.getDate() - 1);
+  startTime.setHours(9, 0, 0, 0);
   
   // Helper to find category
   const getCat = (name: string) => categories.find(c => c.name === name);
@@ -69,7 +72,7 @@ async function main() {
     { cat: '実装/検証',       durationMin: 90 },
   ];
 
-  let currentTime = today9am;
+  let currentTime = startTime;
 
   for (const sample of samples) {
     const cat = getCat(sample.cat);

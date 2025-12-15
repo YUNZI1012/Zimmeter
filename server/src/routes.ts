@@ -10,9 +10,19 @@ const router = Router();
 router.get('/logs/active/:uid', async (req: Request, res: Response) => {
   const { uid } = req.params;
   try {
+    // First find the user by uid
+    const user = await prisma.user.findUnique({
+      where: { uid },
+    });
+
+    if (!user) {
+      res.json(null);
+      return;
+    }
+
     const activeLog = await prisma.workLog.findFirst({
       where: {
-        uid,
+        userId: user.id,
         endTime: null,
       },
     });
@@ -37,10 +47,19 @@ router.post('/logs/switch', async (req: Request, res: Response) => {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // First find the user by uid
+      const user = await tx.user.findUnique({
+        where: { uid },
+      });
+
+      if (!user) {
+        throw new Error('User not found');
+      }
+
       // 1. Close active log
       const activeLog = await tx.workLog.findFirst({
         where: {
-          uid,
+          userId: user.id,
           endTime: null,
         },
       });
@@ -59,10 +78,9 @@ router.post('/logs/switch', async (req: Request, res: Response) => {
       // 2. Create new log
       const newLog = await tx.workLog.create({
         data: {
-          uid,
+          userId: user.id,
           categoryId,
-          categoryLabel,
-          role,
+          categoryNameSnapshot: categoryLabel,
           startTime: now,
         },
       });
@@ -77,11 +95,63 @@ router.post('/logs/switch', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/logs/stop
+// 作業停止
+router.post('/logs/stop', async (req: Request, res: Response) => {
+  const { uid } = req.body;
+  
+  if (!uid) {
+    res.status(400).json({ error: 'UID is required' });
+    return;
+  }
+
+  const now = new Date();
+
+  try {
+    // First find the user by uid
+    const user = await prisma.user.findUnique({
+      where: { uid },
+    });
+
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+
+    const activeLog = await prisma.workLog.findFirst({
+      where: {
+        userId: user.id,
+        endTime: null,
+      },
+    });
+
+    if (!activeLog) {
+      res.status(404).json({ error: 'No active log found' });
+      return;
+    }
+
+    const duration = Math.floor((now.getTime() - activeLog.startTime.getTime()) / 1000);
+    
+    const updatedLog = await prisma.workLog.update({
+      where: { id: activeLog.id },
+      data: {
+        endTime: now,
+        duration,
+      },
+    });
+
+    res.json(updatedLog);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to stop task' });
+  }
+});
+
 // PATCH /api/logs/:id
 // ログ修正
 router.patch('/logs/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { categoryId, categoryLabel, isManual } = req.body;
+  const { categoryId, categoryLabel } = req.body;
 
   try {
     const updatedLog = await prisma.workLog.update({
@@ -89,7 +159,6 @@ router.patch('/logs/:id', async (req: Request, res: Response) => {
       data: {
         categoryId,
         categoryLabel,
-        isManual: isManual ?? true,
       },
     });
     res.json(updatedLog);
@@ -125,9 +194,19 @@ router.get('/logs/history/:uid', async (req: Request, res: Response) => {
   today.setHours(0, 0, 0, 0);
 
   try {
+    // First find the user by uid
+    const user = await prisma.user.findUnique({
+      where: { uid },
+    });
+
+    if (!user) {
+      res.json([]);
+      return;
+    }
+
     const logs = await prisma.workLog.findMany({
       where: {
-        uid,
+        userId: user.id,
         startTime: {
           gte: today,
         },
@@ -152,20 +231,18 @@ router.get('/export/csv', async (req: Request, res: Response) => {
     });
 
     // Simple CSV conversion
-    const headers = ['id', 'uid', 'categoryId', 'categoryLabel', 'role', 'startTime', 'endTime', 'duration', 'isManual', 'createdAt'];
+    const headers = ['id', 'userId', 'categoryId', 'categoryNameSnapshot', 'startTime', 'endTime', 'duration', 'createdAt'];
     const csvRows = [headers.join(',')];
 
     for (const log of logs) {
       csvRows.push([
         log.id,
-        `"${log.uid}"`,
+        `"${log.userId}"`,
         `"${log.categoryId}"`,
-        `"${log.categoryLabel}"`,
-        `"${log.role || ''}"`,
+        `"${log.categoryNameSnapshot}"`,
         log.startTime.toISOString(),
         log.endTime ? log.endTime.toISOString() : '',
         log.duration || '',
-        log.isManual,
         log.createdAt.toISOString()
       ].join(','));
     }

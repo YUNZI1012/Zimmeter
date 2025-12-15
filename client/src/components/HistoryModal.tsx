@@ -10,6 +10,9 @@ interface WorkLog {
   startTime: string;
   endTime?: string | null;
   duration?: number | null;
+  isManual?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface HistoryModalProps {
@@ -29,6 +32,41 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getLogTypeInfo = (log: WorkLog) => {
+    const created = log.createdAt ? new Date(log.createdAt).getTime() : 0;
+    const updated = log.updatedAt ? new Date(log.updatedAt).getTime() : 0;
+    const isModified = updated - created > 1000; // 1 second tolerance
+
+    if (log.isManual) {
+      if (isModified) {
+        return { 
+          label: '作成済（変更済）', 
+          color: 'bg-purple-100 text-purple-700',
+          showTime: true 
+        };
+      }
+      return { 
+        label: '作成済', 
+        color: 'bg-green-100 text-green-700',
+        showTime: false 
+      };
+    }
+
+    if (isModified) {
+      return { 
+        label: '変更済', 
+        color: 'bg-orange-100 text-orange-700',
+        showTime: true 
+      };
+    }
+
+    return { 
+      label: '通常', 
+      color: 'bg-gray-100 text-gray-600',
+      showTime: false 
+    };
   };
 
   return (
@@ -86,7 +124,16 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
                         {log.duration && log.duration > 0 ? formatDuration(log.duration) : '進行中'}
                       </td>
                       <td className="p-2 text-xs text-gray-400 text-center">
-                        {'自動'}
+                        <div className="flex flex-col items-center gap-0.5">
+                          <span className={`px-2 py-0.5 rounded-full whitespace-nowrap ${getLogTypeInfo(log).color}`}>
+                            {getLogTypeInfo(log).label}
+                          </span>
+                          {getLogTypeInfo(log).showTime && log.updatedAt && (
+                            <span className="text-[10px] text-gray-400">
+                              {new Date(log.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2">
                         <div className="flex gap-1 justify-center">

@@ -28,33 +28,15 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily' }: Monito
   const { data: logs, isLoading } = useQuery({
     queryKey: ['monitorLogs', selectedUsers, timeRange],
     queryFn: async () => {
-      const res = await api.get<MonitorLog[]>('/logs/monitor');
+      const res = await api.get<MonitorLog[]>('/logs/monitor', {
+        params: { range: timeRange }
+      });
       let filteredLogs = res.data;
       
       // Filter by selected users
       if (selectedUsers.length > 0) {
         filteredLogs = filteredLogs.filter(log => selectedUsers.includes(log.userId));
       }
-      
-      // Filter by time range
-      const now = new Date();
-      const cutoffDate = new Date();
-      
-      switch (timeRange) {
-        case 'daily':
-          cutoffDate.setDate(now.getDate() - 1);
-          break;
-        case 'weekly':
-          cutoffDate.setDate(now.getDate() - 7);
-          break;
-        case 'monthly':
-          cutoffDate.setMonth(now.getMonth() - 1);
-          break;
-      }
-      
-      filteredLogs = filteredLogs.filter(log => 
-        new Date(log.startTime) >= cutoffDate
-      );
       
       return filteredLogs;
     },
@@ -78,10 +60,10 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily' }: Monito
 
   const getTimeRangeLabel = () => {
     switch (timeRange) {
-      case 'daily': return '直近24h';
+      case 'daily': return '直近24時間';
       case 'weekly': return '直近7日間';
-      case 'monthly': return '直近30日間';
-      default: return '直近24h';
+      case 'monthly': return '直近12ヶ月';
+      default: return '直近24時間';
     }
   };
 

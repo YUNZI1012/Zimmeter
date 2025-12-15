@@ -10,6 +10,9 @@ interface WorkLog {
   startTime: string;
   endTime?: string | null;
   duration?: number | null;
+  isManual?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface TodayHistoryBarProps {
@@ -27,6 +30,23 @@ export const TodayHistoryBar = ({ logs, mergedCategories }: TodayHistoryBarProps
 
   const formatTime = (timeString: string) => {
     return new Date(timeString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getLogType = (log: WorkLog) => {
+    if (log.isManual) {
+      return { label: '作成済（変更済）', color: 'bg-purple-100 text-purple-700' };
+    }
+    
+    // Check if updated (allow 1s tolerance)
+    if (log.createdAt && log.updatedAt) {
+      const created = new Date(log.createdAt).getTime();
+      const updated = new Date(log.updatedAt).getTime();
+      if (updated - created > 1000) {
+        return { label: '変更済', color: 'bg-orange-100 text-orange-700' };
+      }
+    }
+    
+    return { label: '通常', color: 'bg-gray-100 text-gray-600' };
   };
 
   // 只显示今天的履历，按开始时间倒序排列（最新的在前）
@@ -59,12 +79,14 @@ export const TodayHistoryBar = ({ logs, mergedCategories }: TodayHistoryBarProps
                   <th className="p-2 text-left">開始</th>
                   <th className="p-2 text-left">タスク</th>
                   <th className="p-2 text-left">時間</th>
+                  <th className="p-2 text-left">タイプ</th>
                 </tr>
               </thead>
               <tbody>
                 {todayLogs.map(log => {
                   const cat = mergedCategories[log.categoryId];
                   const { className: colorClass, style } = getCategoryStyle(cat);
+                  const type = getLogType(log);
                   
                   return (
                     <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -85,12 +107,17 @@ export const TodayHistoryBar = ({ logs, mergedCategories }: TodayHistoryBarProps
                       <td className="p-2 font-mono text-gray-500">
                         {log.duration && log.duration > 0 ? formatDuration(log.duration) : '進行中'}
                       </td>
+                      <td className="p-2">
+                        <span className={`inline-block px-2 py-0.5 text-[10px] rounded-full whitespace-nowrap ${type.color}`}>
+                          {type.label}
+                        </span>
+                      </td>
                     </tr>
                   );
                 })}
                 {todayLogs.length === 0 && (
                   <tr>
-                    <td colSpan={3} className="p-4 text-center text-gray-400">
+                    <td colSpan={4} className="p-4 text-center text-gray-400">
                       本日の履歴はありません
                     </td>
                   </tr>

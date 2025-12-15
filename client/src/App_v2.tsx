@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Download, History, AlertCircle, Pencil } from 'lucide-react';
+import { Settings, Download, History, AlertCircle, Pencil, Square } from 'lucide-react';
 import { getCategoryColor } from './lib/constants';
 import type { Category } from './lib/constants';
 import { api } from './lib/axios';
@@ -28,6 +28,9 @@ interface WorkLog {
   startTime: string;
   endTime?: string | null;
   duration?: number | null;
+  isManual?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface UserSettings {
@@ -246,6 +249,16 @@ function ZimmeterApp() {
     },
   });
 
+  const stopMutation = useMutation({
+    mutationFn: async () => {
+      return api.post('/logs/stop', {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
+      queryClient.invalidateQueries({ queryKey: ['history', uid] });
+    },
+  });
+
   const handleTaskSwitch = (catId: number) => {
     setShowIdleAlert(false);
 
@@ -253,6 +266,11 @@ function ZimmeterApp() {
     if (activeLogQuery.data?.categoryId === catId) return;
 
     switchMutation.mutate({ categoryId: catId });
+  };
+
+  const handleTaskStop = () => {
+    setShowIdleAlert(false);
+    stopMutation.mutate();
   };
 
   const { formattedTime } = useTimer(activeLogQuery.data?.startTime ?? null);
@@ -354,10 +372,21 @@ function ZimmeterApp() {
                                 </div>
                             </div>
                         </div>
-                        <div className="text-right w-full md:w-auto">
-                            <div className="text-5xl font-mono font-light tracking-tight text-slate-700 tabular-nums">
-                                {formattedTime}
+                        <div className="flex items-center gap-4 w-full md:w-auto">
+                            <div className="text-right">
+                                <div className="text-5xl font-mono font-light tracking-tight text-slate-700 tabular-nums">
+                                    {formattedTime}
+                                </div>
                             </div>
+                            {activeLogQuery.data && (
+                                <button
+                                    onClick={handleTaskStop}
+                                    className="p-3 bg-red-500 hover:bg-red-600 text-white rounded-full transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+                                    title="業務停止"
+                                >
+                                    <Square size={20} />
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -421,6 +450,7 @@ function ZimmeterApp() {
             mode="edit"
             log={editingLog}
             categories={categoriesQuery.data || []}
+            uid={uid}
         />
 
         <EditLogModal
@@ -429,6 +459,7 @@ function ZimmeterApp() {
             mode="create"
             log={null}
             categories={categoriesQuery.data || []}
+            uid={uid}
         />
 
         {isSettingsOpen && (

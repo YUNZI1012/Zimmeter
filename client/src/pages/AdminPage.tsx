@@ -80,7 +80,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  日別
+                  日別（直近24時間）
                 </button>
                 <button
                   onClick={() => setTimeRange('weekly')}
@@ -90,7 +90,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  週別
+                  週別（直近7日間）
                 </button>
                 <button
                   onClick={() => setTimeRange('monthly')}
@@ -100,7 +100,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  月別
+                  月別（直近12ヶ月）
                 </button>
               </div>
             </div>
@@ -123,31 +123,21 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
           </div>
 
           {/* Bar Chart Column */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-bold text-gray-700">棒グラフ</h3>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <AdminWorkLogCharts 
-                selectedUsers={selectedUsers}
-                timeRange={timeRange}
-                chartType="bar"
-              />
-            </div>
+          <div className="flex flex-col min-h-[400px]">
+            <AdminWorkLogCharts 
+              selectedUsers={selectedUsers}
+              timeRange={timeRange}
+              chartType="bar"
+            />
           </div>
 
           {/* Pie Chart Column */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-bold text-gray-700">円グラフ</h3>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <AdminWorkLogCharts 
-                selectedUsers={selectedUsers}
-                timeRange={timeRange}
-                chartType="pie"
-              />
-            </div>
+          <div className="flex flex-col min-h-[400px]">
+            <AdminWorkLogCharts 
+              selectedUsers={selectedUsers}
+              timeRange={timeRange}
+              chartType="pie"
+            />
           </div>
         </div>
 

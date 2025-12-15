@@ -67,7 +67,11 @@ router.post('/logs/manual', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'startTime must be before current time' });
     }
 
-    const end = lastLog ? new Date(lastLog.startTime) : now;
+    // Set endTime same as startTime for manual logs to mark them as closed.
+    // The actual duration/endTime displayed in history is recalculated dynamically based on the next log.
+    // This prevents "active" log detection issues (endTime: null) and invalid durations.
+    const end = start; 
+    const duration = 0;
 
     const category = await prisma.category.findUnique({
       where: { id: Number(categoryId) },
@@ -77,8 +81,6 @@ router.post('/logs/manual', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    const duration = Math.floor((start.getTime() - end.getTime()) / 1000);
-
     const created = await prisma.workLog.create({
       data: {
         userId: currentUser.id,
@@ -87,6 +89,7 @@ router.post('/logs/manual', async (req: Request, res: Response) => {
         startTime: start,
         endTime: end,
         duration,
+        isManual: true, // 手動作成
       },
     });
 
@@ -378,6 +381,7 @@ router.post('/logs/switch', async (req: Request, res: Response) => {
           categoryId: Number(categoryId),
           categoryNameSnapshot: category.name, // ★スナップショット保存
           startTime: now,
+          isManual: false, // 通常作成
         },
       });
 
@@ -388,6 +392,41 @@ router.post('/logs/switch', async (req: Request, res: Response) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to switch task' });
+  }
+});
+
+// POST /api/logs/stop
+// 作業停止
+router.post('/logs/stop', async (req: Request, res: Response) => {
+  try {
+    const currentUser = getUser(req);
+    const now = new Date();
+
+    const activeLog = await prisma.workLog.findFirst({
+      where: {
+        userId: currentUser.id,
+        endTime: null,
+      },
+    });
+
+    if (!activeLog) {
+      return res.status(404).json({ error: 'No active log found' });
+    }
+
+    const duration = Math.floor((now.getTime() - activeLog.startTime.getTime()) / 1000);
+    
+    const updatedLog = await prisma.workLog.update({
+      where: { id: activeLog.id },
+      data: {
+        endTime: now,
+        duration,
+      },
+    });
+
+    res.json(updatedLog);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to stop task' });
   }
 });
 
@@ -504,19 +543,28 @@ router.get('/logs/monitor', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Admin only' });
     }
 
-    // 直近24時間のログ
-    const oneDayAgo = new Date();
-    oneDayAgo.setHours(oneDayAgo.getHours() - 24);
+    const { range } = req.query;
+    const rangeStr = String(range || 'daily');
+
+    const cutoffDate = new Date();
+    if (rangeStr === 'weekly') {
+      cutoffDate.setDate(cutoffDate.getDate() - 7);
+    } else if (rangeStr === 'monthly') {
+      cutoffDate.setMonth(cutoffDate.getMonth() - 12);
+    } else {
+      // daily (default)
+      cutoffDate.setHours(cutoffDate.getHours() - 24);
+    }
 
     const logs = await prisma.workLog.findMany({
       where: {
-        createdAt: {
-          gte: oneDayAgo,
+        startTime: { // Changed from createdAt to startTime for better accuracy with work logs
+          gte: cutoffDate,
         }
       },
       orderBy: { startTime: 'desc' },
       include: { user: true, category: true },
-      take: 100 // 重くなりすぎないよう制限
+      take: 1000 // Increased limit to accommodate larger ranges
     });
     res.json(logs);
 

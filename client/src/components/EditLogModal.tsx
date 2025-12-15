@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/axios';
 import type { Category } from '../lib/constants';
 import { useToast } from '../context/ToastContext';
@@ -16,20 +16,14 @@ interface EditLogModalProps {
   mode: 'edit' | 'create';
   log: WorkLog | null;
   categories: Category[];
+  uid?: string;
 }
 
-export const EditLogModal = ({ isOpen, onClose, mode, log, categories }: EditLogModalProps) => {
+export const EditLogModal = ({ isOpen, onClose, mode, log, categories, uid }: EditLogModalProps) => {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [startTime, setStartTime] = useState<string>('');
-  const [endTime, setEndTime] = useState<string>('');
-
-  const { data: todayLogs } = useQuery({
-    queryKey: ['history'],
-    queryFn: async () => api.get('/logs/history').then(r => r.data),
-    enabled: isOpen && mode === 'create',
-  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -46,18 +40,8 @@ export const EditLogModal = ({ isOpen, onClose, mode, log, categories }: EditLog
       const hh = pad(now.getHours());
       const mm = pad(now.getMinutes());
       setStartTime(`${hh}:${mm}`);
-
-      // 当日の最後の履歴があれば、その startTime をデフォルトの終了時間にする
-      const lastLog = todayLogs?.[0];
-      if (lastLog?.startTime) {
-        const lastStart = new Date(lastLog.startTime);
-        setEndTime(`${pad(lastStart.getHours())}:${pad(lastStart.getMinutes())}`);
-      } else {
-        // なければ現在時刻を終了時間にする
-        setEndTime(`${hh}:${mm}`);
-      }
     }
-  }, [isOpen, mode, log, todayLogs]);
+  }, [isOpen, mode, log]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: { categoryId: number }) => {
@@ -65,8 +49,8 @@ export const EditLogModal = ({ isOpen, onClose, mode, log, categories }: EditLog
       return api.patch(`/logs/${log.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['history'] });
-      queryClient.invalidateQueries({ queryKey: ['activeLog'] });
+      queryClient.invalidateQueries({ queryKey: ['history', uid] });
+      queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
       onClose();
     },
     onError: (error: any) => {
@@ -80,8 +64,8 @@ export const EditLogModal = ({ isOpen, onClose, mode, log, categories }: EditLog
       return api.post('/logs/manual', data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['history'] });
-      queryClient.invalidateQueries({ queryKey: ['activeLog'] });
+      queryClient.invalidateQueries({ queryKey: ['history', uid] });
+      queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
       onClose();
     },
     onError: (error: any) => {
@@ -166,7 +150,7 @@ export const EditLogModal = ({ isOpen, onClose, mode, log, categories }: EditLog
           <button onClick={onClose} className="px-4 py-2 border rounded-lg hover:bg-gray-50">キャンセル</button>
           <button 
             onClick={handleSave} 
-            disabled={!selectedCatId || (mode === 'create' && (!startTime || !endTime)) || updateMutation.isPending || createMutation.isPending}
+            disabled={!selectedCatId || (mode === 'create' && !startTime) || updateMutation.isPending || createMutation.isPending}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-bold shadow-sm"
           >
             {(updateMutation.isPending || createMutation.isPending) ? '保存中...' : '保存'}

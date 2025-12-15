@@ -108,7 +108,10 @@ model WorkLog {
   endTime     DateTime?
   duration    Int?      // 秒 (endTime - startTime)
 
+  isManual    Boolean   @default(false) // 手動作成フラグ
+
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt      // 変更検知用
 
   @@index([userId, startTime])
   @@map("work_logs")

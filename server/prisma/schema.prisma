@@ -109,6 +109,7 @@ model WorkLog {
   duration    Int?      // 秒 (endTime - startTime)
 
   isManual    Boolean   @default(false) // 手動作成フラグ
+  isEdited    Boolean   @default(false) // 編集済みフラグ (内容修正時のみtrue)
 
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @default(now()) @updatedAt      // 変更検知用

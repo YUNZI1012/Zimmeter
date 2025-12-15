@@ -11,6 +11,7 @@ interface WorkLog {
   endTime?: string | null;
   duration?: number | null;
   isManual?: boolean;
+  isEdited?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -34,16 +35,14 @@ export const TodayHistoryBar = ({ logs, mergedCategories }: TodayHistoryBarProps
 
   const getLogType = (log: WorkLog) => {
     if (log.isManual) {
-      return { label: '作成済（変更済）', color: 'bg-purple-100 text-purple-700' };
+      if (log.isEdited) {
+        return { label: '作成済（変更済）', color: 'bg-purple-100 text-purple-700' };
+      }
+      return { label: '作成済', color: 'bg-green-100 text-green-700' };
     }
     
-    // Check if updated (allow 1s tolerance)
-    if (log.createdAt && log.updatedAt) {
-      const created = new Date(log.createdAt).getTime();
-      const updated = new Date(log.updatedAt).getTime();
-      if (updated - created > 1000) {
-        return { label: '変更済', color: 'bg-orange-100 text-orange-700' };
-      }
+    if (log.isEdited) {
+      return { label: '変更済', color: 'bg-orange-100 text-orange-700' };
     }
     
     return { label: '通常', color: 'bg-gray-100 text-gray-600' };

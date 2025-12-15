@@ -522,6 +522,7 @@ router.patch('/logs/:id', async (req: Request, res: Response) => {
       data: {
         categoryId: Number(categoryId),
         categoryNameSnapshot: category.name,
+        isEdited: true, // 内容変更フラグ
       },
     });
 

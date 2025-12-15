@@ -11,6 +11,7 @@ interface WorkLog {
   endTime?: string | null;
   duration?: number | null;
   isManual?: boolean;
+  isEdited?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -35,12 +36,8 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
   };
 
   const getLogTypeInfo = (log: WorkLog) => {
-    const created = log.createdAt ? new Date(log.createdAt).getTime() : 0;
-    const updated = log.updatedAt ? new Date(log.updatedAt).getTime() : 0;
-    const isModified = updated - created > 1000; // 1 second tolerance
-
     if (log.isManual) {
-      if (isModified) {
+      if (log.isEdited) {
         return { 
           label: '作成済（変更済）', 
           color: 'bg-purple-100 text-purple-700',
@@ -54,7 +51,7 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
       };
     }
 
-    if (isModified) {
+    if (log.isEdited) {
       return { 
         label: '変更済', 
         color: 'bg-orange-100 text-orange-700',

@@ -29,6 +29,7 @@ interface WorkLog {
   endTime?: string | null;
   duration?: number | null;
   isManual?: boolean;
+  isEdited?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

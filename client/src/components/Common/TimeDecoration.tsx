@@ -24,16 +24,14 @@ export const TimeDecoration = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-lg z-30">
+    <div className="bg-white/95 backdrop-blur-sm border-t border-gray-200 shadow-lg">
       <div className="container mx-auto px-2 sm:px-4 py-2 sm:py-3">
         <div className="flex items-center justify-between min-w-0">
-          {/* 左侧営業時間标签 */}
           <div className="flex items-center gap-2 text-sm text-gray-600 flex-shrink-0">
             <Clock size={16} />
             <span className="font-medium whitespace-nowrap">営業時間</span>
           </div>
           
-          {/* 中央时间区域 - 占据剩余空间并可滚动 */}
           <div className="flex-1 min-w-0 mx-2 sm:mx-4">
             <div className="overflow-x-auto">
               <div className="flex items-center justify-center gap-1 min-w-max py-1">
@@ -63,7 +61,6 @@ export const TimeDecoration = () => {
             </div>
           </div>
           
-          {/* 右侧営業中状态 */}
           <div className="text-sm text-gray-500 flex-shrink-0 whitespace-nowrap">
             {currentHour >= 8 && currentHour <= 20 ? '営業中' : '営業外'}
           </div>

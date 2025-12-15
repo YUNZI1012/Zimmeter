@@ -11,6 +11,7 @@ import { EditLogModal } from './components/EditLogModal';
 import { LoginModal } from './components/LoginModal';
 import { StatusGuard } from './components/Common/StatusGuard';
 import { TimeDecoration } from './components/Common/TimeDecoration';
+import { TodayHistoryBar } from './components/Common/TodayHistoryBar';
 import { useUserStatus } from './hooks/useUserStatus';
 import { useTimer } from './hooks/useTimer';
 import { AdminPage } from './pages/AdminPage';
@@ -145,7 +146,7 @@ function ZimmeterApp() {
     refetchInterval: 3000,
   });
 
-  // 4. Fetch History
+  // 4. Fetch History (always fetch for today history bar)
   const historyQuery = useQuery({
       queryKey: ['history', uid],
       queryFn: async () => {
@@ -153,7 +154,8 @@ function ZimmeterApp() {
           const res = await api.get<WorkLog[]>(`/logs/history`);
           return res.data;
       },
-      enabled: !!uid && showHistory,
+      enabled: !!uid,
+      refetchInterval: 3000, // 每3秒更新一次
   });
 
   // Merge Categories & Settings
@@ -280,7 +282,7 @@ function ZimmeterApp() {
             </div>
         </header>
 
-        <main className="container mx-auto p-4 md:p-6 pb-32">
+        <main className="container mx-auto p-4 md:p-6">
             {activeTab === 'admin' ? (
                 <AdminPage onBack={() => setActiveTab('main')} />
             ) : (
@@ -346,6 +348,15 @@ function ZimmeterApp() {
                             </div>
                         </div>
                     )}
+
+                    {/* 营业时间栏 */}
+                    <TimeDecoration />
+                    
+                    {/* 本日履历栏 */}
+                    <TodayHistoryBar
+                      logs={historyQuery.data || []}
+                      mergedCategories={categoriesQuery.data?.reduce((acc, c) => ({...acc, [c.id]: c}), {}) || {}}
+                    />
                 </>
             )}
         </main>
@@ -408,8 +419,6 @@ function ZimmeterApp() {
                 </div>
             </div>
         )}
-
-        <TimeDecoration />
     </div>
   );
 }

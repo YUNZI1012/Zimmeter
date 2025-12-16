@@ -39,22 +39,27 @@ interface StatsResponse {
   byCategory: CategoryStat[];
 }
 
-type ModeKey = 'day' | 'week' | 'month';
+type ModeKey = 'day' | 'week' | 'month' | 'year' | 'custom';
 
 export const AdminWorkLogCharts = ({ 
   selectedUsers = [], 
   timeRange = 'daily',
-  chartType = 'bar'
+  chartType = 'bar',
+  customStartDate,
+  customEndDate
 }: {
   selectedUsers?: number[];
-  timeRange?: 'daily' | 'weekly' | 'monthly';
+  timeRange?: 'daily' | 'weekly' | 'monthly' | 'custom';
   chartType?: 'bar' | 'pie';
+  customStartDate?: string;
+  customEndDate?: string;
 }) => {
-  const getModeFromTimeRange = (range: 'daily' | 'weekly' | 'monthly'): ModeKey => {
+  const getModeFromTimeRange = (range: 'daily' | 'weekly' | 'monthly' | 'custom'): ModeKey => {
     switch (range) {
       case 'daily': return 'day';
       case 'weekly': return 'week';
       case 'monthly': return 'month';
+      case 'custom': return 'custom';
       default: return 'day';
     }
   };
@@ -96,39 +101,29 @@ export const AdminWorkLogCharts = ({
       return [];
   }, [selectedUsers, users]);
 
-  // Primary user for Single-User charts (Time Series)
-  const primaryUserId = effectiveUserIds[0];
-
-  // Query for Multi-User Stats (Pie Chart)
-  const { data: multiStats, isLoading: isLoadingMulti } = useQuery<StatsResponse>({
-    queryKey: ['logsStats', effectiveUserIds, mode],
+  // Unified Query for Stats (Bar & Pie)
+  // Fetches aggregated stats for ALL selected users
+  const { data: stats, isLoading } = useQuery<StatsResponse>({
+    queryKey: ['logsStats', effectiveUserIds, mode, customStartDate, customEndDate],
     queryFn: async () => {
       if (effectiveUserIds.length === 0) throw new Error('No user selected');
-      const res = await api.get<StatsResponse>('/logs/stats', {
-        params: { userIds: effectiveUserIds.join(','), mode },
-      });
+      
+      const params: any = { userIds: effectiveUserIds.join(','), mode };
+      if (mode === 'custom' && customStartDate && customEndDate) {
+        params.start = customStartDate;
+        params.end = customEndDate;
+      }
+
+      const res = await api.get<StatsResponse>('/logs/stats', { params });
       return res.data;
     },
     enabled: effectiveUserIds.length > 0,
   });
 
-  // Query for Single-User Stats (Bar Chart)
-  const { data: singleStats, isLoading: isLoadingSingle } = useQuery<StatsResponse>({
-    queryKey: ['logsStats', [primaryUserId], mode],
-    queryFn: async () => {
-      if (!primaryUserId) throw new Error('No user selected');
-      const res = await api.get<StatsResponse>('/logs/stats', {
-        params: { userIds: String(primaryUserId), mode },
-      });
-      return res.data;
-    },
-    enabled: !!primaryUserId,
-  });
-
   const pieData = useMemo(() => {
-    if (!multiStats?.byCategory) return [];
+    if (!stats?.byCategory) return [];
     
-    return multiStats.byCategory.map(stat => {
+    return stats.byCategory.map(stat => {
         const category = categories?.find(c => c.name === stat.categoryName);
         const { color: bgClass } = getCategoryColor(category || { name: stat.categoryName });
         
@@ -154,11 +149,11 @@ export const AdminWorkLogCharts = ({
 
         return {
             name: stat.categoryName,
-            value: stat.minutes,
+            value: Math.abs(stat.minutes),
             fill
         };
     }).sort((a, b) => b.value - a.value);
-  }, [multiStats, categories]);
+  }, [stats, categories]);
 
   const handleDownload = async () => {
     try {
@@ -195,7 +190,7 @@ export const AdminWorkLogCharts = ({
             {chartType === 'bar' ? '棒グラフ' : '円グラフ'}
           </h3>
           <span className="text-xs text-gray-400">
-            {selectedUsers.length > 0 ? `${selectedUsers.length} users` : 'No users selected'}
+            {selectedUsers.length > 0 ? `${selectedUsers.length} users` : 'Default User'}
           </span>
         </div>
       </div>
@@ -203,11 +198,11 @@ export const AdminWorkLogCharts = ({
       <div className="flex-1 flex flex-col min-h-0">
         {chartType === 'bar' ? (
           <div className="flex-1 flex flex-col min-h-[300px]">
-            {isLoadingSingle && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
-            {!isLoadingSingle && singleStats && singleStats.timeSeries.length === 0 && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">データがありません</div>}
-            {!isLoadingSingle && singleStats && singleStats.timeSeries.length > 0 && (
+            {isLoading && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
+            {!isLoading && stats && stats.timeSeries.length === 0 && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">データがありません</div>}
+            {!isLoading && stats && stats.timeSeries.length > 0 && (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={singleStats.timeSeries}>
+                <BarChart data={stats.timeSeries.map(item => ({ ...item, totalMinutes: Math.abs(item.totalMinutes) }))}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis 
                     dataKey="label" 
@@ -216,10 +211,13 @@ export const AdminWorkLogCharts = ({
                     textAnchor="end"
                     height={60}
                   />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <YAxis 
+                    tick={{ fontSize: 11 }} 
+                    tickFormatter={(value) => Math.abs(value).toString()}
+                  />
                   <Tooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`${value}分`, '時間']}
+                    formatter={(value: number) => [`${Math.abs(value)}分`, '時間']}
                   />
                   <Bar dataKey="totalMinutes" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -228,9 +226,9 @@ export const AdminWorkLogCharts = ({
           </div>
         ) : (
           <div className="flex-1 flex flex-col min-h-[300px]">
-            {isLoadingMulti && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
-            {!isLoadingMulti && multiStats && multiStats.byCategory.length === 0 && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">データがありません</div>}
-            {!isLoadingMulti && pieData.length > 0 && (
+            {isLoading && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">読み込み中...</div>}
+            {!isLoading && stats && stats.byCategory.length === 0 && <div className="flex-1 flex items-center justify-center text-gray-400 text-xs">データがありません</div>}
+            {!isLoading && pieData.length > 0 && (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -248,7 +246,7 @@ export const AdminWorkLogCharts = ({
                   </Pie>
                   <Tooltip 
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`${value}分`, '時間']}
+                    formatter={(value: number, name: string) => [`${value}分`, name]}
                   />
                   <Legend 
                     layout="vertical" 

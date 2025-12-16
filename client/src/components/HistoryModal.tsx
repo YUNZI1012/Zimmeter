@@ -66,6 +66,12 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
     };
   };
 
+  const todayLogs = logs.filter(log => {
+    const logDate = new Date(log.startTime).toDateString();
+    const today = new Date().toDateString();
+    return logDate === today;
+  });
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
@@ -99,7 +105,7 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
               </tr>
             </thead>
             <tbody>
-              {logs.map(log => {
+              {todayLogs.map(log => {
                  const cat = mergedCategories[log.categoryId];
                  const { className: colorClass, style } = getCategoryStyle(cat);
                  
@@ -118,7 +124,7 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
                         </div>
                       </td>
                       <td className="p-2 text-gray-500 font-mono text-center">
-                        {log.duration && log.duration > 0 ? formatDuration(log.duration) : '進行中'}
+                        {log.endTime ? formatDuration(log.duration || 0) : '進行中'}
                       </td>
                       <td className="p-2 text-xs text-gray-400 text-center">
                         <div className="flex flex-col items-center gap-0.5">
@@ -146,7 +152,7 @@ export const HistoryModal = ({ isOpen, onClose, logs, onEdit, onAdd, mergedCateg
                     </tr>
                  );
               })}
-              {logs.length === 0 && (
+              {todayLogs.length === 0 && (
                 <tr><td colSpan={5} className="p-4 text-center text-gray-400">履歴なし</td></tr>
               )}
             </tbody>

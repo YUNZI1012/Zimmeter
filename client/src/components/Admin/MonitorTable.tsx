@@ -19,26 +19,28 @@ interface MonitorLog {
 
 interface MonitorTableProps {
   selectedUsers?: number[];
-  timeRange?: 'daily' | 'weekly' | 'monthly';
+  timeRange?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
-export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily' }: MonitorTableProps) => {
+export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customStartDate, customEndDate }: MonitorTableProps) => {
   const [editingLog, setEditingLog] = useState<MonitorLog | null>(null);
 
   const { data: logs, isLoading } = useQuery({
-    queryKey: ['monitorLogs', selectedUsers, timeRange],
+    queryKey: ['monitorLogs', selectedUsers, timeRange, customStartDate, customEndDate],
     queryFn: async () => {
-      const res = await api.get<MonitorLog[]>('/logs/monitor', {
-        params: { range: timeRange }
-      });
-      let filteredLogs = res.data;
-      
-      // Filter by selected users
+      const params: any = { range: timeRange };
       if (selectedUsers.length > 0) {
-        filteredLogs = filteredLogs.filter(log => selectedUsers.includes(log.userId));
+        params.userIds = selectedUsers.join(',');
+      }
+      if (timeRange === 'custom' && customStartDate && customEndDate) {
+        params.start = customStartDate;
+        params.end = customEndDate;
       }
       
-      return filteredLogs;
+      const res = await api.get<MonitorLog[]>('/logs/monitor', { params });
+      return res.data;
     },
     refetchInterval: 30000, // 30秒更新
   });
@@ -62,7 +64,8 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily' }: Monito
     switch (timeRange) {
       case 'daily': return '直近24時間';
       case 'weekly': return '直近7日間';
-      case 'monthly': return '直近12ヶ月';
+      case 'monthly': return '年別（直近12ヶ月）';
+      case 'custom': return `${customStartDate} ~ ${customEndDate}`;
       default: return '直近24時間';
     }
   };

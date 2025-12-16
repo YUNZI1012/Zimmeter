@@ -562,9 +562,13 @@ router.get('/logs/history', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
     
-    // Get start of today (00:00:00)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get start of today (00:00:00) in JST (UTC+9)
+    // Server might be in UTC, so new Date().setHours(0,0,0,0) would be 09:00 JST.
+    // We want 00:00 JST, which is previous day 15:00 UTC.
+    const now = new Date();
+    const jstTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    jstTime.setUTCHours(0, 0, 0, 0);
+    const today = new Date(jstTime.getTime() - 9 * 60 * 60 * 1000);
 
     const logs = await prisma.workLog.findMany({
       where: {
@@ -580,16 +584,35 @@ router.get('/logs/history', async (req: Request, res: Response) => {
     });
 
     // 各項目のdurationを「次の項目の開始時間との差」で再計算
-    const now = new Date();
     const updatedLogs = logs.map((log, index) => {
       const nextLog = logs[index + 1];
-      const endTime = nextLog ? new Date(nextLog.startTime) : now;
-      const duration = Math.floor((endTime.getTime() - new Date(log.startTime).getTime()) / 1000);
-      return {
-        ...log,
-        endTime: endTime.toISOString(),
-        duration,
-      };
+      
+      // 次のログがある場合：次のログの開始時間までをこのログの期間とする（隙間なし）
+      if (nextLog) {
+        const endTime = new Date(nextLog.startTime);
+        const duration = Math.floor((endTime.getTime() - new Date(log.startTime).getTime()) / 1000);
+        return {
+          ...log,
+          endTime: endTime.toISOString(),
+          duration,
+        };
+      }
+
+      // 次のログがない場合（最後のログ）：
+      // DB上でendTimeがあれば（停止済み）、その値をそのまま使う
+      if (log.endTime) {
+         // durationがDBに入っていない場合の計算（念のため）
+         const duration = log.duration ?? Math.floor((new Date(log.endTime).getTime() - new Date(log.startTime).getTime()) / 1000);
+         return {
+           ...log,
+           endTime: new Date(log.endTime).toISOString(),
+           duration
+         };
+      }
+
+      // DB上でendTimeがない（進行中）：そのまま返す（duration: null）
+      // フロントエンドで "進行中" と表示されるようになる
+      return log;
     });
 
     res.json(updatedLogs.reverse()); // 表示は新しい順に戻す
@@ -606,28 +629,52 @@ router.get('/logs/monitor', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Admin only' });
     }
 
-    const { range } = req.query;
+    const { range, userIds, start, end } = req.query;
     const rangeStr = String(range || 'daily');
 
-    const cutoffDate = new Date();
+    let cutoffDate = new Date();
+    let endDate: Date | undefined;
+
     if (rangeStr === 'weekly') {
       cutoffDate.setDate(cutoffDate.getDate() - 7);
     } else if (rangeStr === 'monthly') {
-      cutoffDate.setMonth(cutoffDate.getMonth() - 12);
+      // monthly now represents "Last 12 months" (Annual view)
+      cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
+    } else if (rangeStr === 'custom' && start && end) {
+      cutoffDate = new Date(String(start));
+      // Adjust start to beginning of day
+      cutoffDate.setHours(0, 0, 0, 0);
+      
+      endDate = new Date(String(end));
+      // Adjust end to end of day
+      endDate.setHours(23, 59, 59, 999);
     } else {
       // daily (default)
       cutoffDate.setHours(cutoffDate.getHours() - 24);
     }
 
-    const logs = await prisma.workLog.findMany({
-      where: {
-        startTime: { // Changed from createdAt to startTime for better accuracy with work logs
+    const where: any = {
+        startTime: {
           gte: cutoffDate,
         }
-      },
+    };
+    
+    if (endDate) {
+      where.startTime.lte = endDate;
+    }
+
+    if (userIds) {
+        const ids = String(userIds).split(',').map(n => Number(n)).filter(n => !isNaN(n));
+        if (ids.length > 0) {
+            where.userId = { in: ids };
+        }
+    }
+
+    const logs = await prisma.workLog.findMany({
+      where,
       orderBy: { startTime: 'desc' },
       include: { user: true, category: true },
-      take: 1000 // Increased limit to accommodate larger ranges
+      take: 2000 // Increased limit
     });
     res.json(logs);
 
@@ -645,14 +692,14 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'Admin only' });
     }
 
-    const { userId, userIds, mode } = req.query;
+    const { userId, userIds, mode, start, end } = req.query;
 
     if ((!userId && !userIds) || !mode) {
       return res.status(400).json({ error: 'Missing userId(s) or mode' });
     }
 
     const modeStr = String(mode);
-    if (!['day', 'week', 'month'].includes(modeStr)) {
+    if (!['day', 'week', 'month', 'year', 'custom'].includes(modeStr)) {
       return res.status(400).json({ error: 'Invalid mode' });
     }
 
@@ -668,28 +715,64 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
        return res.status(400).json({ error: 'No valid user IDs provided' });
     }
 
-    const now = new Date();
-    let rangeStart = new Date(now);
+    let rangeStart = new Date();
+    let rangeEnd = new Date(); // Default to now
     let bucketCount = 0;
+    let bucketMode = modeStr; // Internal mode for bucketing logic
 
-    if (modeStr === 'day') {
+    if (modeStr === 'custom') {
+      if (!start || !end) {
+        return res.status(400).json({ error: 'Missing start or end date for custom mode' });
+      }
+      rangeStart = new Date(String(start));
+      rangeStart.setHours(0, 0, 0, 0);
+      
+      rangeEnd = new Date(String(end));
+      rangeEnd.setHours(23, 59, 59, 999);
+
+      const diffTime = Math.abs(rangeEnd.getTime() - rangeStart.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays <= 60) {
+        bucketMode = 'day';
+        bucketCount = diffDays + 1; // Include end date
+      } else if (diffDays <= 365 * 2) { // Up to 2 years, show months
+        bucketMode = 'month';
+        // Adjust rangeStart to beginning of month for cleaner buckets if needed, or just keep custom start
+        // Ideally align buckets to start date
+        const months = (rangeEnd.getFullYear() - rangeStart.getFullYear()) * 12 + (rangeEnd.getMonth() - rangeStart.getMonth());
+        bucketCount = months + 1;
+      } else {
+        bucketMode = 'year';
+        const years = rangeEnd.getFullYear() - rangeStart.getFullYear();
+        bucketCount = years + 1;
+      }
+
+    } else if (modeStr === 'day') {
       // 直近30日
       rangeStart.setDate(rangeStart.getDate() - 29);
       rangeStart.setHours(0, 0, 0, 0);
       bucketCount = 30;
+      bucketMode = 'day';
     } else if (modeStr === 'week') {
-      // 直近12週（現在の週を含む）
-      // 週の開始を月曜とみなす
+      // 直近12週
       const day = rangeStart.getDay();
-      const diffToMonday = (day + 6) % 7; // 0:日 -> 6, 1:月 -> 0 ...
+      const diffToMonday = (day + 6) % 7; 
       rangeStart.setDate(rangeStart.getDate() - diffToMonday);
       rangeStart.setHours(0, 0, 0, 0);
       rangeStart.setDate(rangeStart.getDate() - 7 * 11);
       bucketCount = 12;
-    } else {
-      // month: 直近12ヶ月（今月を含む）
+      bucketMode = 'week';
+    } else if (modeStr === 'month') {
+      // month: 直近12ヶ月
       rangeStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth() - 11, 1, 0, 0, 0, 0);
       bucketCount = 12;
+      bucketMode = 'month';
+    } else {
+      // year: 直近5年
+      rangeStart = new Date(rangeStart.getFullYear() - 4, 0, 1, 0, 0, 0, 0);
+      bucketCount = 5;
+      bucketMode = 'year';
     }
 
     // 対象ユーザーのログを取得
@@ -698,7 +781,7 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
         userId: { in: targetIds },
         startTime: {
           gte: rangeStart,
-          lte: now,
+          lte: rangeEnd,
         },
       },
       orderBy: { startTime: 'asc' },
@@ -708,26 +791,33 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
     type Bucket = { label: string; totalSeconds: number };
     const buckets: Bucket[] = [];
 
-    if (modeStr === 'day') {
+    if (bucketMode === 'day') {
       for (let i = 0; i < bucketCount; i++) {
         const d = new Date(rangeStart);
         d.setDate(rangeStart.getDate() + i);
         const label = d.toISOString().slice(0, 10); // YYYY-MM-DD
         buckets.push({ label, totalSeconds: 0 });
       }
-    } else if (modeStr === 'week') {
+    } else if (bucketMode === 'week') {
       for (let i = 0; i < bucketCount; i++) {
         const d = new Date(rangeStart);
         d.setDate(rangeStart.getDate() + i * 7);
         const year = d.getFullYear();
-        const weekIndex = i + 1; // 直近12週の中でのインデックス
+        const weekIndex = i + 1; 
         const label = `${year}-W${String(weekIndex).padStart(2, '0')}`;
         buckets.push({ label, totalSeconds: 0 });
       }
-    } else {
+    } else if (bucketMode === 'month') {
       for (let i = 0; i < bucketCount; i++) {
         const d = new Date(rangeStart.getFullYear(), rangeStart.getMonth() + i, 1);
         const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        buckets.push({ label, totalSeconds: 0 });
+      }
+    } else {
+      // year
+      for (let i = 0; i < bucketCount; i++) {
+        const year = rangeStart.getFullYear() + i;
+        const label = `${year}`;
         buckets.push({ label, totalSeconds: 0 });
       }
     }
@@ -741,18 +831,18 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
 
       let bucketIndex = -1;
 
-      if (modeStr === 'day') {
+      if (bucketMode === 'day') {
         const diffDays = Math.floor((start.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
         if (diffDays >= 0 && diffDays < bucketCount) {
           bucketIndex = diffDays;
         }
-      } else if (modeStr === 'week') {
+      } else if (bucketMode === 'week') {
         const diffDays = Math.floor((start.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24));
         const diffWeeks = Math.floor(diffDays / 7);
         if (diffWeeks >= 0 && diffWeeks < bucketCount) {
           bucketIndex = diffWeeks;
         }
-      } else {
+      } else if (bucketMode === 'month') {
         const year = start.getFullYear();
         const month = start.getMonth();
         const startYear = rangeStart.getFullYear();
@@ -760,6 +850,14 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
         const diffMonths = (year - startYear) * 12 + (month - startMonth);
         if (diffMonths >= 0 && diffMonths < bucketCount) {
           bucketIndex = diffMonths;
+        }
+      } else {
+        // year
+        const year = start.getFullYear();
+        const startYear = rangeStart.getFullYear();
+        const diffYears = year - startYear;
+        if (diffYears >= 0 && diffYears < bucketCount) {
+          bucketIndex = diffYears;
         }
       }
 

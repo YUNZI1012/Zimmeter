@@ -104,7 +104,7 @@ export const TodayHistoryBar = ({ logs, mergedCategories }: TodayHistoryBarProps
                         </div>
                       </td>
                       <td className="p-2 font-mono text-gray-500">
-                        {log.duration && log.duration > 0 ? formatDuration(log.duration) : '進行中'}
+                        {log.endTime ? formatDuration(log.duration || 0) : '進行中'}
                       </td>
                       <td className="p-2">
                         <span className={`inline-block px-2 py-0.5 text-[10px] rounded-full whitespace-nowrap ${type.color}`}>

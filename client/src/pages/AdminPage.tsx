@@ -13,13 +13,20 @@ interface AdminPageProps {
   onBack: () => void;
 }
 
-type TimeRange = 'daily' | 'weekly' | 'monthly';
+type TimeRange = 'daily' | 'weekly' | 'monthly' | 'custom';
 
 export const AdminPage = ({ onBack }: AdminPageProps) => {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isProjectManagementOpen, setIsProjectManagementOpen] = useState(false);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [timeRange, setTimeRange] = useState<TimeRange>('daily');
+
+  const today = new Date();
+  const weekAgo = new Date(today);
+  weekAgo.setDate(today.getDate() - 7);
+  
+  const [customStartDate, setCustomStartDate] = useState(weekAgo.toISOString().slice(0, 10));
+  const [customEndDate, setCustomEndDate] = useState(today.toISOString().slice(0, 10));
 
   // Fetch all users for selection
   const { data: users } = useQuery({
@@ -100,9 +107,34 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  月別（直近12ヶ月）
+                  年別（直近12ヶ月）
                 </button>
               </div>
+            </div>
+            
+            {/* Custom Date Range Inputs */}
+            <div className={`flex items-center gap-2 transition-opacity duration-200 ${timeRange === 'custom' ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}>
+              <input
+                type="date"
+                value={customStartDate}
+                onFocus={() => setTimeRange('custom')}
+                onChange={(e) => {
+                  setCustomStartDate(e.target.value);
+                  setTimeRange('custom');
+                }}
+                className={`border rounded px-2 py-1 text-xs text-gray-700 ${timeRange === 'custom' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}`}
+              />
+              <span className="text-gray-400 text-xs">～</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onFocus={() => setTimeRange('custom')}
+                onChange={(e) => {
+                  setCustomEndDate(e.target.value);
+                  setTimeRange('custom');
+                }}
+                className={`border rounded px-2 py-1 text-xs text-gray-700 ${timeRange === 'custom' ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-300'}`}
+              />
             </div>
           </div>
         </div>
@@ -118,6 +150,8 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
               <MonitorTable 
                 selectedUsers={selectedUsers}
                 timeRange={timeRange}
+                customStartDate={customStartDate}
+                customEndDate={customEndDate}
               />
             </div>
           </div>
@@ -128,6 +162,8 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
               selectedUsers={selectedUsers}
               timeRange={timeRange}
               chartType="bar"
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
             />
           </div>
 
@@ -137,6 +173,8 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
               selectedUsers={selectedUsers}
               timeRange={timeRange}
               chartType="pie"
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
             />
           </div>
         </div>

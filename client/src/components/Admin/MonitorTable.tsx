@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/axios';
-import { Activity, Clock, Pencil } from 'lucide-react';
+import { Activity, Clock, Pencil, Download } from 'lucide-react';
 import { getCategoryColor } from '../../lib/constants';
 import type { Category } from '../../lib/constants';
 import { EditLogModal } from '../EditLogModal';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface MonitorLog {
   id: number;
@@ -19,7 +21,7 @@ interface MonitorLog {
 
 interface MonitorTableProps {
   selectedUsers?: number[];
-  timeRange?: 'daily' | 'weekly' | 'monthly' | 'custom';
+  timeRange?: 'daily' | 'weekly' | 'last30days' | 'monthly' | 'custom';
   customStartDate?: string;
   customEndDate?: string;
 }
@@ -34,7 +36,15 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
       if (selectedUsers.length > 0) {
         params.userIds = selectedUsers.join(',');
       }
-      if (timeRange === 'custom' && customStartDate && customEndDate) {
+      
+      if (timeRange === 'last30days') {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - 30);
+        params.range = 'custom';
+        params.start = start.toISOString().slice(0, 10);
+        params.end = end.toISOString().slice(0, 10);
+      } else if (timeRange === 'custom' && customStartDate && customEndDate) {
         params.start = customStartDate;
         params.end = customEndDate;
       }
@@ -42,6 +52,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
       const res = await api.get<MonitorLog[]>('/logs/monitor', { params });
       return res.data;
     },
+    enabled: selectedUsers.length > 0,
     refetchInterval: 30000, // 30秒更新
   });
 
@@ -58,15 +69,89 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
-  if (isLoading) return <div className="p-4">Loading monitor...</div>;
-
   const getTimeRangeLabel = () => {
     switch (timeRange) {
       case 'daily': return '直近24時間';
       case 'weekly': return '直近7日間';
+      case 'last30days': return '直近30日間';
       case 'monthly': return '年別（直近12ヶ月）';
       case 'custom': return `${customStartDate} ~ ${customEndDate}`;
       default: return '直近24時間';
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!logs || logs.length === 0) {
+      alert('データがありません');
+      return;
+    }
+
+    try {
+      const doc = new jsPDF();
+      
+      // Load Japanese font (IPAex Gothic)
+      const fontUrl = '/fonts/ipaexg.ttf';
+      const fontName = 'IPAexGothic';
+      
+      try {
+        const response = await fetch(fontUrl);
+        if (!response.ok) throw new Error('Font download failed');
+        const buffer = await response.arrayBuffer();
+        
+        // Convert ArrayBuffer to Base64
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        const fontBase64 = window.btoa(binary);
+        
+        doc.addFileToVFS('ipaexg.ttf', fontBase64);
+        doc.addFont('ipaexg.ttf', fontName, 'normal');
+        doc.setFont(fontName);
+      } catch (fontError) {
+        console.warn('Failed to load Japanese font, text may be garbled:', fontError);
+      }
+
+      // Title
+      doc.setFontSize(16);
+      doc.text(`Activity Log (${getTimeRangeLabel()})`, 14, 20);
+      
+      const tableColumn = ["Time", "User", "UID", "Task", "Duration"];
+      const tableRows: any[] = [];
+
+      logs.forEach(log => {
+        const logData = [
+          new Date(log.startTime).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+          log.user.name,
+          log.user.uid,
+          log.categoryNameSnapshot,
+          log.duration ? `${Math.floor(log.duration / 60)}m` : 'Running'
+        ];
+        tableRows.push(logData);
+      });
+
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        styles: { 
+          fontSize: 8,
+          font: fontName, // Use the custom font
+          fontStyle: 'normal'
+        }, 
+        headStyles: { 
+            fillColor: [59, 130, 246],
+            font: fontName // Ensure header uses font too
+        }, 
+      });
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      doc.save(`monitor_logs_${dateStr}.pdf`);
+    } catch (error) {
+      console.error('PDF generation failed:', error);
+      alert('PDFの作成に失敗しました');
     }
   };
 
@@ -78,7 +163,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
             <Activity size={20} />
             アクティビティ ({getTimeRangeLabel()})
           </h3>
-          <span className="text-xs text-gray-400">{logs?.length} records</span>
+          <span className="text-xs text-gray-400">{logs?.length || 0} records</span>
         </div>
         
         <div 
@@ -120,7 +205,15 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {logs?.map((log) => {
+              {isLoading && selectedUsers.length > 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-gray-400">読み込み中...</td></tr>
+              )}
+              
+              {selectedUsers.length === 0 && (
+                <tr><td colSpan={5} className="p-8 text-center text-gray-400">ユーザーを選択してください</td></tr>
+              )}
+
+              {selectedUsers.length > 0 && !isLoading && logs?.map((log) => {
                 // 簡易的に色を取得 (カテゴリが存在すればその設定を使用、なければ名前から推測)
                 const currentCat = categories?.find(c => c.name === log.categoryNameSnapshot);
                 const { color: bgClass } = getCategoryColor(currentCat || { name: log.categoryNameSnapshot });
@@ -168,11 +261,31 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
                   </tr>
                 );
               })}
-              {logs?.length === 0 && (
+              
+              {selectedUsers.length > 0 && !isLoading && logs?.length === 0 && (
                   <tr><td colSpan={5} className="p-8 text-center text-gray-400">履歴がありません</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 bg-gray-50 shrink-0">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">レポート出力</h4>
+            <button
+              onClick={handleDownloadPdf}
+              disabled={!logs || logs.length === 0}
+              className={`flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors ${
+                !logs || logs.length === 0
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-red-600 hover:bg-red-700 text-white'
+              }`}
+              title={!logs || logs.length === 0 ? "データがありません" : "PDFとしてダウンロード"}
+            >
+              <Download size={16} />
+              PDFダウンロード
+            </button>
+          </div>
         </div>
       </div>
 

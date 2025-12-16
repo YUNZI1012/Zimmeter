@@ -733,10 +733,10 @@ router.get('/logs/stats', async (req: Request, res: Response) => {
       const diffTime = Math.abs(rangeEnd.getTime() - rangeStart.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-      if (diffDays <= 60) {
+      if (diffDays <= 31) {
         bucketMode = 'day';
         bucketCount = diffDays + 1; // Include end date
-      } else if (diffDays <= 365 * 2) { // Up to 2 years, show months
+      } else if (diffDays <= 366) { // Up to 1 year
         bucketMode = 'month';
         // Adjust rangeStart to beginning of month for cleaner buckets if needed, or just keep custom start
         // Ideally align buckets to start date

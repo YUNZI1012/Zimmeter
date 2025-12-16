@@ -13,7 +13,7 @@ interface AdminPageProps {
   onBack: () => void;
 }
 
-type TimeRange = 'daily' | 'weekly' | 'monthly' | 'custom';
+type TimeRange = 'daily' | 'weekly' | 'last30days' | 'monthly' | 'custom';
 
 export const AdminPage = ({ onBack }: AdminPageProps) => {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
@@ -24,6 +24,10 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
+  
+  const minDate = new Date(today);
+  minDate.setFullYear(today.getFullYear() - 10);
+  const minDateString = minDate.toISOString().slice(0, 10);
   
   const [customStartDate, setCustomStartDate] = useState(weekAgo.toISOString().slice(0, 10));
   const [customEndDate, setCustomEndDate] = useState(today.toISOString().slice(0, 10));
@@ -51,7 +55,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
             </button>
             <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2">
               <LayoutDashboard className="text-blue-400" size={20} />
-              Zimmeter Admin
+              Zimmeter Admin v2
             </h1>
           </div>
           <div className="flex items-center gap-4 shrink-0">
@@ -100,6 +104,16 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
                   週別（直近7日間）
                 </button>
                 <button
+                  onClick={() => setTimeRange('last30days')}
+                  className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
+                    timeRange === 'last30days'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  月別（直近30日）
+                </button>
+                <button
                   onClick={() => setTimeRange('monthly')}
                   className={`px-3 py-1 rounded text-xs font-medium transition-colors ${
                     timeRange === 'monthly'
@@ -117,6 +131,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
               <input
                 type="date"
                 value={customStartDate}
+                min={minDateString}
                 onFocus={() => setTimeRange('custom')}
                 onChange={(e) => {
                   setCustomStartDate(e.target.value);
@@ -128,6 +143,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
               <input
                 type="date"
                 value={customEndDate}
+                min={minDateString}
                 onFocus={() => setTimeRange('custom')}
                 onChange={(e) => {
                   setCustomEndDate(e.target.value);
@@ -140,24 +156,19 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
         </div>
 
         {/* Three Column Layout for Monitor and Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-[600px]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:h-[600px]">
           {/* Monitor Column */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-100 bg-gray-50">
-              <h3 className="font-bold text-gray-700">モニター</h3>
-            </div>
-            <div className="flex-1 overflow-hidden">
-              <MonitorTable 
-                selectedUsers={selectedUsers}
-                timeRange={timeRange}
-                customStartDate={customStartDate}
-                customEndDate={customEndDate}
-              />
-            </div>
+          <div className="min-h-[500px] lg:min-h-0 h-full">
+            <MonitorTable 
+              selectedUsers={selectedUsers}
+              timeRange={timeRange}
+              customStartDate={customStartDate}
+              customEndDate={customEndDate}
+            />
           </div>
 
           {/* Bar Chart Column */}
-          <div className="flex flex-col min-h-[400px]">
+          <div className="min-h-[500px] lg:min-h-0 h-full">
             <AdminWorkLogCharts 
               selectedUsers={selectedUsers}
               timeRange={timeRange}
@@ -168,7 +179,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
           </div>
 
           {/* Pie Chart Column */}
-          <div className="flex flex-col min-h-[400px]">
+          <div className="min-h-[500px] lg:min-h-0 h-full">
             <AdminWorkLogCharts 
               selectedUsers={selectedUsers}
               timeRange={timeRange}

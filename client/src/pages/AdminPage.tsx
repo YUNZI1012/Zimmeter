@@ -55,7 +55,7 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
             </button>
             <h1 className="text-lg lg:text-xl font-bold tracking-tight flex items-center gap-2">
               <LayoutDashboard className="text-blue-400" size={20} />
-              Zimmeter Admin v2
+              Zimmeter Admin
             </h1>
           </div>
           <div className="flex items-center gap-4 shrink-0">

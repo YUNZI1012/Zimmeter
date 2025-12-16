@@ -338,6 +338,8 @@ export const AdminWorkLogCharts = ({
          return `${startDate.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })} ~ ${now.toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}`;
     } else if (timeRange === 'weekly') {
          startDate.setDate(startDate.getDate() - 7);
+    } else if (timeRange === 'last30days') {
+         startDate.setDate(startDate.getDate() - 30);
     } else if (timeRange === 'monthly') {
          startDate.setFullYear(startDate.getFullYear() - 1);
     }

@@ -260,6 +260,12 @@ function ZimmeterApp() {
     // Prevent consecutive clicks
     if (activeLogQuery.data?.categoryId === catId) return;
 
+    // Check if there is an active task running
+    if (activeLogQuery.data) {
+      showToast('進行中の項目を停止してください', 'error');
+      return;
+    }
+
     switchMutation.mutate({ categoryId: catId });
   };
 

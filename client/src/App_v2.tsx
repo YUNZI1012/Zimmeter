@@ -211,10 +211,10 @@ function ZimmeterApp() {
 
     const sorted = [...allCats].sort((a, b) => a.priority - b.priority);
 
-    // Special logic for admin: ALWAYS use system defaults to match new user experience
+    // Special logic for admin: ALWAYS use system defaults (plus their own custom items)
     if (userStatus?.role === 'ADMIN') {
-        primaryIds = sorted.filter(c => c.type === 'SYSTEM' && c.defaultList === 'PRIMARY').map(c => c.id);
-        secondaryIds = sorted.filter(c => c.type === 'SYSTEM' && c.defaultList !== 'PRIMARY' && c.defaultList !== 'HIDDEN').map(c => c.id);
+        primaryIds = sorted.filter(c => c.defaultList === 'PRIMARY').map(c => c.id);
+        secondaryIds = sorted.filter(c => c.defaultList !== 'PRIMARY' && c.defaultList !== 'HIDDEN').map(c => c.id);
     } else if (primaryIds.length === 0 && secondaryIds.length === 0) {
        // New user: show SYSTEM categories with their defaultList settings
        primaryIds = sorted.filter(c => c.type === 'SYSTEM' && c.defaultList === 'PRIMARY').map(c => c.id);
@@ -489,7 +489,7 @@ function ZimmeterApp() {
                                         category={cat}
                                         isActive={activeLogQuery.data?.categoryId === cat.id}
                                         onClick={() => handleTaskSwitch(cat.id)}
-                                        onDoubleClick={() => handleTaskDoubleClick(cat.id)}
+                                        onDoubleClick={() => handleHistoryDoubleClick(cat.id)}
                                         className="h-16 text-sm"
                                     />
                                 ))}

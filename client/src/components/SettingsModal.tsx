@@ -192,12 +192,15 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
         borderColor: selectedPreset.border
       });
     } else {
-      // 主画面設定で作成する项目は、AdminならSYSTEM、それ以外ならCUSTOM
-      const type = isAdmin ? 'SYSTEM' : 'CUSTOM';
+      // 主画面設定で作成する項目は、Adminであっても個人用(CUSTOM)とする
+      // システム共有(SYSTEM)項目は管理画面のプロジェクト管理から作成する運用とする
+      const type = 'CUSTOM';
       // 新規作成時は最後尾に追加（現在の最大priority + 10）
       const maxPriority = categories.length > 0 ? Math.max(...categories.map(c => c.priority || 0)) : 0;
       
-      const defaultList = targetList === 'primary' ? 'PRIMARY' : 'SECONDARY';
+      // 画面上での追加先（保存ボタンを押すまではサーバー上のdefaultListはHIDDENにしておく）
+      // これにより、保存前にメイン画面に反映されてしまうのを防ぐ
+      const defaultList = 'HIDDEN';
       
       createMutation.mutate({ 
         name: newLabel.trim(), 

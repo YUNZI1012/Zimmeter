@@ -191,6 +191,15 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
             if (status.isFixed) statusStr = `${dateShort} 未退社(補正済)`;
             else if (status.hasLeft) statusStr = `${dateShort} 退社済`;
             else statusStr = `${dateShort} 未退社`;
+        } else {
+            const now = new Date();
+            const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+            if (y === jstNow.getFullYear() && Number(m) === jstNow.getMonth()+1 && Number(d) === jstNow.getDate()) {
+                statusStr = '勤務中';
+            } else {
+                const dateShort = `${Number(m)}.${Number(d)}`;
+                statusStr = `${dateShort} 未退社`;
+            }
         }
 
         // Determine Type Label and Modification Time logic
@@ -346,6 +355,10 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
                     if (dateKey === todayKey) {
                         statusText = '勤務中';
                         statusColor = 'text-blue-500';
+                    } else {
+                        const dateShort = `${logDate.getMonth() + 1}.${logDate.getDate()}`;
+                        statusText = `${dateShort} 未退社`;
+                        statusColor = 'text-red-500 font-bold';
                     }
                 }
 

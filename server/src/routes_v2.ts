@@ -993,12 +993,31 @@ router.get('/export/pdf', async (req: Request, res: Response) => {
          duration = duration ?? Math.floor((new Date(endTime).getTime() - new Date(log.startTime).getTime()) / 1000);
       }
 
+      // Determine Type Label
+      let typeLabel = '通常';
+      let showModTime = false;
+
+      if (log.isManual) {
+        if (log.isEdited) {
+            typeLabel = '作成済(変更済)';
+            showModTime = true;
+        } else {
+            typeLabel = '作成済';
+            showModTime = true;
+        }
+      } else if (log.isEdited) {
+        typeLabel = '変更済';
+        showModTime = true;
+      }
+
       return {
         task: log.categoryNameSnapshot,
         start: new Date(log.startTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }),
         end: endTime ? new Date(endTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) : '進行中',
         duration: duration ? 
-          `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m` : '-'
+          `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m` : '-',
+        type: typeLabel,
+        modTime: showModTime ? new Date(log.updatedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) : '-'
       };
     });
 
@@ -1062,31 +1081,26 @@ router.get('/export/pdf', async (req: Request, res: Response) => {
 
     // Table Header
     const tableTop = doc.y;
-    const colX = [50, 130, 300, 400]; // Start X positions for columns
     
     doc.fontSize(10);
-    doc.text('開始', colX[0], tableTop, { width: 70 });
-    doc.text('終了', colX[1], tableTop, { width: 70 });
-    doc.text('業務内容', colX[2], tableTop, { width: 150 }); // Swapped pos for better layout? No, let's just do sequential.
-    // Let's adjust columns: Start, End, Task, Duration
-    // Start: 50
-    // End: 110
-    // Task: 170
-    // Duration: 450
     
     const col = {
-        start: 50,
-        end: 110,
-        task: 170,
-        dur: 480
+        start: 40,
+        end: 85,
+        task: 130,
+        type: 310,
+        mod: 400,
+        dur: 460
     };
 
     doc.text('開始', col.start, tableTop);
     doc.text('終了', col.end, tableTop);
     doc.text('業務内容', col.task, tableTop);
+    doc.text('タイプ', col.type, tableTop);
+    doc.text('変更時間', col.mod, tableTop);
     doc.text('時間', col.dur, tableTop);
 
-    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+    doc.moveTo(40, tableTop + 15).lineTo(550, tableTop + 15).stroke();
 
     let y = tableTop + 25;
 
@@ -1099,7 +1113,9 @@ router.get('/export/pdf', async (req: Request, res: Response) => {
 
         doc.text(log.start, col.start, y);
         doc.text(log.end, col.end, y);
-        doc.text(log.task, col.task, y, { width: 300 }); // Allow wrapping
+        doc.text(log.task, col.task, y, { width: 170 }); // Allow wrapping, limit width
+        doc.text(log.type, col.type, y);
+        doc.text(log.modTime, col.mod, y);
         doc.text(log.duration, col.dur, y);
         
         y += 20;

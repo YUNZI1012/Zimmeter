@@ -11,7 +11,7 @@ import autoTable from 'jspdf-autotable';
 interface MonitorLog {
   id: number;
   userId: number;
-  user: { uid: string; name: string };
+  user: { uid: string; name: string; role: string };
   categoryId: number;
   category: { name: string };
   categoryNameSnapshot: string;
@@ -198,7 +198,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
             <thead className="text-gray-500 bg-gray-50 border-b sticky top-0 z-10">
               <tr>
                 <th className="p-3 font-medium">Time</th>
-                <th className="p-3 font-medium">User</th>
+                <th className="p-3 font-medium">User / Role</th>
                 <th className="p-3 font-medium">Task</th>
                 <th className="p-3 font-medium text-right">Duration</th>
                 <th className="p-3 font-medium text-center">Action</th>
@@ -232,7 +232,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
                     </td>
                     <td className="p-3">
                       <div className="font-medium text-gray-900">{log.user.name}</div>
-                      <div className="text-xs text-gray-400">{log.user.uid}</div>
+                      <div className="text-xs text-gray-400">Role: {log.user.role}</div>
                     </td>
                     <td className="p-3">
                       <span className={`font-medium ${color}`}>

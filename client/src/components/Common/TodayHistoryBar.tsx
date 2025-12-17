@@ -54,6 +54,8 @@ export const TodayHistoryBar = ({ logs, mergedCategories, onItemDoubleClick }: T
     .filter(log => {
       const logDate = new Date(log.startTime).toDateString();
       const today = new Date().toDateString();
+      // 時間が0の履歴（終了済みかつ時間が0）は表示しない
+      if (log.endTime && (log.duration || 0) === 0) return false;
       return logDate === today;
     })
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -89,7 +91,11 @@ export const TodayHistoryBar = ({ logs, mergedCategories, onItemDoubleClick }: T
                   const type = getLogType(log);
                   
                   return (
-                    <tr key={log.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr 
+                      key={log.id} 
+                      className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
+                      onDoubleClick={() => onItemDoubleClick?.(log.categoryId)}
+                    >
                       <td className="p-2 font-mono text-gray-500">
                         {formatTime(log.startTime)}
                       </td>

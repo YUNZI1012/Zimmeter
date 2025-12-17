@@ -68,6 +68,7 @@ function ZimmeterApp() {
   const { data: userStatus } = useUserStatus(!!uid);
   const { showToast } = useToast();
   const prevUserRef = useRef<typeof userStatus>(undefined);
+  const opRateLimitRef = useRef<number>(0);
 
   // Monitor User Info Changes
   useEffect(() => {
@@ -280,9 +281,16 @@ function ZimmeterApp() {
   });
 
   const handleTaskSwitch = (catId: number) => {
+    // Global Rate Limit Check
+    const now = Date.now();
+    if (now - opRateLimitRef.current < 800) {
+        showToast('操作が頻繁すぎます。再度お試しください。', 'error');
+        return;
+    }
+    
     setShowIdleAlert(false);
 
-    // Prevent consecutive clicks
+    // Prevent consecutive clicks if already active (server state)
     if (activeLogQuery.data?.categoryId === catId) return;
 
     // Check if there is an active task running
@@ -291,12 +299,11 @@ function ZimmeterApp() {
       return;
     }
 
-    switchMutation.mutate({ categoryId: catId });
-  };
+    if (switchMutation.isPending) return;
 
-  const handleTaskDoubleClick = (catId: number) => {
-    setInitialAddCategoryId(catId);
-    setIsAddingLog(true);
+    // Update operation time only on valid execution attempt
+    opRateLimitRef.current = now;
+    switchMutation.mutate({ categoryId: catId });
   };
 
   const handleHistoryDoubleClick = (catId: number) => {
@@ -466,7 +473,6 @@ function ZimmeterApp() {
                                     category={cat}
                                     isActive={activeLogQuery.data?.categoryId === cat.id}
                                     onClick={() => handleTaskSwitch(cat.id)}
-                                    onDoubleClick={() => handleTaskDoubleClick(cat.id)}
                                 />
                             ))}
                         </div>

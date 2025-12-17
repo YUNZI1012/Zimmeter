@@ -105,6 +105,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
       const res = await api.get<MonitorLog[]>('/logs/monitor', { params });
       return res.data;
     },
+    select: (data) => data.filter(log => log.duration !== 0),
     enabled: selectedUsers.length > 0,
     refetchInterval: 30000, // 30秒更新
   });

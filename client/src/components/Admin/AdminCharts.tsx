@@ -313,7 +313,9 @@ export const AdminWorkLogCharts = ({
             value: Math.abs(stat.minutes),
             fill
         };
-    }).sort((a, b) => b.value - a.value);
+    })
+    .filter(item => item.value > 0)
+    .sort((a, b) => b.value - a.value);
   }, [stats, categories]);
 
   const barData = useMemo(() => {

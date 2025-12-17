@@ -80,6 +80,9 @@ export const HistoryModal = ({
   };
 
     const todayLogs = logs.filter(log => {
+    // 時間が0の履歴（終了済みかつ時間が0）は表示しない
+    if (log.endTime && (log.duration || 0) === 0) return false;
+
     const logDate = new Date(log.startTime).toDateString();
     const today = new Date().toDateString();
     const isSameDay = logDate === today;

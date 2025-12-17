@@ -317,19 +317,54 @@ router.get('/status/check', async (req: Request, res: Response) => {
 router.post('/status/fix', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    const { date } = req.body; // YYYY-MM-DD
+    const { date, leaveTime } = req.body; // YYYY-MM-DD, leaveTime: ISO String
 
     if (!date) return res.status(400).json({ error: 'Date is required' });
 
+    let leftAtDate: Date | undefined;
+
+    // 1. If leaveTime provided, close unstopped tasks
+    if (leaveTime) {
+        leftAtDate = new Date(leaveTime);
+        
+        // Find any active log (endTime is null)
+        const activeLog = await prisma.workLog.findFirst({
+            where: {
+                userId: currentUser.id,
+                endTime: null,
+            }
+        });
+
+        if (activeLog) {
+            // Ensure leaveTime is after startTime
+            if (leftAtDate.getTime() > activeLog.startTime.getTime()) {
+                const duration = Math.floor((leftAtDate.getTime() - activeLog.startTime.getTime()) / 1000);
+                await prisma.workLog.update({
+                    where: { id: activeLog.id },
+                    data: {
+                        endTime: leftAtDate,
+                        duration
+                    }
+                });
+            }
+        }
+    }
+
+    // 2. Update DailyStatus
     await prisma.dailyStatus.upsert({
         where: { userId_date: { userId: currentUser.id, date } },
         create: { 
             userId: currentUser.id, 
             date, 
             isFixed: true, 
-            hasLeft: true // Fixing implies they are done with that day
+            hasLeft: true, 
+            leftAt: leftAtDate 
         }, 
-        update: { isFixed: true }
+        update: { 
+            isFixed: true,
+            hasLeft: true, // Force true as fixed
+            ...(leftAtDate ? { leftAt: leftAtDate } : {})
+        }
     });
 
     res.json({ success: true });

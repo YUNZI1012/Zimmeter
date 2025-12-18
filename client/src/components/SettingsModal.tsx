@@ -350,7 +350,7 @@ export const SettingsModal = ({ isOpen, onClose, uid, categories, initialPrimary
                                         {cat.name}
                                     </span>
                                     {cat.type === 'SYSTEM' && (
-                                        <span className="text-xs bg-gray-200 text-gray-500 px-1 rounded">SYS</span>
+                                        <span className="text-xs bg-gray-200 text-gray-500 px-1 rounded">ADMIN</span>
                                     )}
                                 </div>
                                 <div className="flex gap-4 items-center">

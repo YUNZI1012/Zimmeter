@@ -391,11 +391,11 @@ function ZimmeterApp() {
                     <History size={20} />
                 </button>
                 <a 
-                    href={`${api.defaults.baseURL}/export/pdf?uid=${uid}`} 
+                    href={`${api.defaults.baseURL}/export/csv?uid=${uid}`} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="PDFエクスポート"
+                    title="CSVエクスポート"
                 >
                     <Download size={20} />
                 </a>

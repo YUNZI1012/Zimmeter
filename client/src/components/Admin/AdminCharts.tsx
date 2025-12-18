@@ -207,17 +207,19 @@ export const AdminWorkLogCharts = ({
       return [];
   }, [selectedUsers]);
 
-  const { displayLabel, fullLabel, filenameLabel } = useMemo(() => {
+  const { namesLabel, countLabel, fullLabel, filenameLabel } = useMemo(() => {
     if (effectiveUserIds.length === 0) {
       return { 
-        displayLabel: 'ユーザー未選択', 
+        namesLabel: 'ユーザー未選択', 
+        countLabel: '',
         fullLabel: 'ユーザー未選択', 
         filenameLabel: 'no_user' 
       };
     }
     if (!users) {
       return { 
-        displayLabel: '', 
+        namesLabel: '', 
+        countLabel: '',
         fullLabel: '', 
         filenameLabel: '' 
       };
@@ -230,21 +232,20 @@ export const AdminWorkLogCharts = ({
     // Full list for tooltip
     const fullLabel = names.join(', ');
     
-    let displayLabel = '';
-    let filenameLabel = '';
+    // Labels for display
+    const namesLabel = names.join(', ');
+    const countLabel = `(全${totalCount}名)`;
 
+    // Filename logic
+    let filenameLabel = '';
     if (totalCount <= 10) {
-      displayLabel = names.join(', ');
-      // Sanitize for filename
       filenameLabel = names.join('_').replace(/\s+/g, '_');
     } else {
       const first10 = names.slice(0, 10);
-      displayLabel = `${first10.join(', ')}... (全${totalCount}名)`;
-      // Sanitize for filename
       filenameLabel = `${first10.join('_').replace(/\s+/g, '_')}_etc_${totalCount}users`;
     }
 
-    return { displayLabel, fullLabel, filenameLabel };
+    return { namesLabel, countLabel, fullLabel, filenameLabel };
   }, [users, effectiveUserIds]);
 
   // Unified Query for Stats (Bar & Pie)
@@ -405,13 +406,18 @@ export const AdminWorkLogCharts = ({
               {chartType === 'bar' ? '棒グラフ' : '円グラフ'}
             </h3>
             <div className="flex items-center gap-2">
-              <div className="flex flex-col items-end mr-2">
-                <span className="text-xs font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded mb-0.5">
+              <div className="flex flex-col items-end mr-2 max-w-[200px] sm:max-w-[300px]">
+                <span className="text-xs font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded mb-0.5 shrink-0">
                   {dateRangeLabel}
                 </span>
-                <span className="text-xs text-gray-400 max-w-[200px] truncate font-medium" title={fullLabel}>
-                  {displayLabel || 'Loading...'}
-                </span>
+                <div className="flex items-center justify-end w-full gap-1 text-xs text-gray-400 font-medium" title={fullLabel}>
+                    <span className="truncate min-w-0">
+                        {namesLabel || 'Loading...'}
+                    </span>
+                    <span className="shrink-0 whitespace-nowrap">
+                        {countLabel}
+                    </span>
+                </div>
               </div>
               <button 
                 onClick={() => setIsExpanded(true)}
@@ -475,9 +481,14 @@ export const AdminWorkLogCharts = ({
                       <span className="font-mono text-sm bg-gray-100 px-2 py-0.5 rounded text-gray-700 mb-1">
                           {dateRangeLabel}
                       </span>
-                      <span className="text-sm text-gray-500 max-w-[400px] truncate" title={fullLabel}>
-                          User: {displayLabel || 'Loading...'}
-                      </span>
+                      <div className="flex items-center justify-end gap-1 text-sm text-gray-500 max-w-[400px]" title={fullLabel}>
+                          <span className="truncate min-w-0">
+                              User: {namesLabel || 'Loading...'}
+                          </span>
+                          <span className="shrink-0 whitespace-nowrap">
+                              {countLabel}
+                          </span>
+                      </div>
                   </div>
                   <button 
                     onClick={() => setIsExpanded(false)}

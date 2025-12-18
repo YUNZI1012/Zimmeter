@@ -223,6 +223,121 @@ const getJstDateStr = (date: Date = new Date()) => {
   return jst.toISOString().split('T')[0];
 };
 
+// GET /api/export/csv
+// 当日の履歴をCSVでダウンロード
+router.get('/export/csv', async (req: Request, res: Response) => {
+  try {
+    const currentUser = getUser(req);
+
+    // Get today's logs (same logic as /logs/history)
+    const now = new Date();
+    const jstTime = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    jstTime.setUTCHours(0, 0, 0, 0);
+    const today = new Date(jstTime.getTime() - 9 * 60 * 60 * 1000);
+
+    const logs = await prisma.workLog.findMany({
+      where: {
+        userId: currentUser.id,
+        startTime: { gte: today },
+      },
+      orderBy: { startTime: 'asc' },
+      include: { category: true }
+    });
+
+    // Calculate durations and format logs
+    const formattedLogs = logs.map((log, index) => {
+      let endTime = log.endTime;
+      let duration = log.duration;
+
+      const nextLog = logs[index + 1];
+      if (nextLog) {
+        endTime = nextLog.startTime;
+        duration = Math.floor((new Date(endTime).getTime() - new Date(log.startTime).getTime()) / 1000);
+      } else if (endTime) {
+         duration = duration ?? Math.floor((new Date(endTime).getTime() - new Date(log.startTime).getTime()) / 1000);
+      }
+
+      // Determine Type Label
+      let typeLabel = '通常';
+      let modTimeStr = '-';
+
+      if (log.isManual) {
+        if (log.isEdited) {
+            typeLabel = '作成済(変更済)';
+            modTimeStr = new Date(log.updatedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
+        } else {
+            typeLabel = '作成済';
+            modTimeStr = new Date(log.updatedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
+        }
+      } else if (log.isEdited) {
+        typeLabel = '変更済';
+        modTimeStr = new Date(log.updatedAt).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' });
+      }
+
+      const durationStr = duration ? 
+        `${Math.floor(duration / 3600)}h ${Math.floor((duration % 3600) / 60)}m` : '-';
+
+      return {
+        start: new Date(log.startTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }),
+        end: endTime ? new Date(endTime).toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit' }) : '進行中',
+        task: log.categoryNameSnapshot,
+        type: typeLabel,
+        modTime: modTimeStr,
+        duration: durationStr
+      };
+    });
+
+    // Generate CSV Content
+    const header = ['開始', '終了', '業務内容', 'タイプ', '変更時間', '時間'];
+    const rows = formattedLogs.map(l => [
+        l.start,
+        l.end,
+        `"${l.task.replace(/"/g, '""')}"`, // Escape quotes
+        l.type,
+        l.modTime,
+        l.duration
+    ]);
+
+    // Add BOM for Excel compatibility (UTF-8)
+    const bom = '\uFEFF';
+    const csvContent = bom + [
+        header.join(','),
+        ...rows.map(r => r.join(','))
+    ].join('\n');
+
+    // Total Time
+    const totalSeconds = logs.reduce((acc, log, index) => {
+        let dur = log.duration || 0;
+        if (!log.endTime && logs[index+1]) {
+             dur = Math.floor((new Date(logs[index+1].startTime).getTime() - new Date(log.startTime).getTime()) / 1000);
+        } else if (log.endTime) {
+             dur = Math.floor((new Date(log.endTime).getTime() - new Date(log.startTime).getTime()) / 1000);
+        }
+        return acc + dur;
+    }, 0);
+
+    const totalH = Math.floor(totalSeconds / 3600);
+    const totalM = Math.floor((totalSeconds % 3600) / 60);
+    
+    const footer = `\n,,,,,合計: ${totalH}時間 ${totalM}分`;
+    
+    const finalCsv = csvContent + footer;
+
+    // Response headers
+    const filename = `daily_report_${new Date().toISOString().split('T')[0]}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    res.send(finalCsv);
+
+  } catch (error) {
+    console.error(error);
+    if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to export CSV' });
+    }
+  }
+});
+
 // POST /api/status/leave
 // 退社処理: 今日のステータスを「退社済」にする
 router.post('/status/leave', async (req: Request, res: Response) => {

@@ -5,8 +5,6 @@ import { Activity, Clock, Pencil, Download } from 'lucide-react';
 import { getCategoryColor } from '../../lib/constants';
 import type { Category } from '../../lib/constants';
 import { EditLogModal } from '../EditLogModal';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 interface MonitorLog {
   id: number;
@@ -135,48 +133,18 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadCsv = () => {
     if (!logs || logs.length === 0) {
       alert('データがありません');
       return;
     }
 
     try {
-      const doc = new jsPDF('l'); // Landscape for more columns
+      // Header
+      const header = ["Time", "User", "Role", "UID", "Daily Status", "Task", "Type", "Mod Time", "Duration"];
       
-      // Load Japanese font (IPAex Gothic)
-      const fontUrl = '/fonts/ipaexg.ttf';
-      const fontName = 'IPAexGothic';
-      
-      try {
-        const response = await fetch(fontUrl);
-        if (!response.ok) throw new Error('Font download failed');
-        const buffer = await response.arrayBuffer();
-        
-        // Convert ArrayBuffer to Base64
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-            binary += String.fromCharCode(bytes[i]);
-        }
-        const fontBase64 = window.btoa(binary);
-        
-        doc.addFileToVFS('ipaexg.ttf', fontBase64);
-        doc.addFont('ipaexg.ttf', fontName, 'normal');
-        doc.setFont(fontName);
-      } catch (fontError) {
-        console.warn('Failed to load Japanese font, text may be garbled:', fontError);
-      }
-
-      // Title
-      doc.setFontSize(16);
-      doc.text(`Activity Log (${getTimeRangeLabel()})`, 14, 20);
-      
-      const tableColumn = ["Time", "User", "Role", "UID", "Daily Status", "Task", "Type", "Mod Time", "Duration"];
-      const tableRows: any[] = [];
-
-      logs.forEach(log => {
+      // Rows
+      const rows = logs.map(log => {
         // Determine Daily Status (Strict JST)
         const dateObj = new Date(log.startTime);
         const jstDate = new Date(dateObj.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
@@ -206,55 +174,56 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
 
         // Determine Type Label and Modification Time logic
         let typeLabel = '通常';
-        let modTimeStr = '';
+        let modTimeStr = '-';
         
         if (log.isManual) {
             if (log.isEdited) {
                 typeLabel = '作成済(変更済)';
-                modTimeStr = new Date(log.updatedAt).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                modTimeStr = new Date(log.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
             } else {
                 typeLabel = '作成済';
-                modTimeStr = new Date(log.updatedAt).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                modTimeStr = new Date(log.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
             }
         } else if (log.isEdited) {
             typeLabel = '変更済';
-            modTimeStr = new Date(log.updatedAt).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            modTimeStr = new Date(log.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
         }
 
-        const logData = [
-          new Date(log.startTime).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+        return [
+          new Date(log.startTime).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' }),
           log.user.name,
           log.user.role,
           log.user.uid,
           statusStr,
-          log.categoryNameSnapshot,
+          `"${log.categoryNameSnapshot.replace(/"/g, '""')}"`, // Escape CSV
           typeLabel,
           modTimeStr,
           log.duration ? `${Math.floor(log.duration / 60)}m` : 'Running'
         ];
-        tableRows.push(logData);
       });
 
-      autoTable(doc, {
-        head: [tableColumn],
-        body: tableRows,
-        startY: 30,
-        styles: { 
-          fontSize: 8,
-          font: fontName, // Use the custom font
-          fontStyle: 'normal'
-        }, 
-        headStyles: { 
-            fillColor: [59, 130, 246],
-            font: fontName // Ensure header uses font too
-        }, 
-      });
+      // Combine with BOM for Excel UTF-8 support
+      const bom = '\uFEFF';
+      const csvContent = bom + [
+        header.join(','),
+        ...rows.map(r => r.join(','))
+      ].join('\n');
 
+      // Download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
       const dateStr = new Date().toISOString().slice(0, 10);
-      doc.save(`monitor_logs_${dateStr}.pdf`);
+      link.href = url;
+      link.setAttribute('download', `monitor_logs_${dateStr}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
     } catch (error) {
-      console.error('PDF generation failed:', error);
-      alert('PDFの作成に失敗しました');
+      console.error('CSV generation failed:', error);
+      alert('CSVの作成に失敗しました');
     }
   };
 
@@ -376,16 +345,7 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
                         typeColor = 'text-orange-600';
                     } else {
                         typeLabel = '作成済';
-                        showModTime = true; // Manual logs usually interesting to know when created/updated? Or just keep simple. 
-                        // Requirement says "display modification time". For created, maybe creation time is start time?
-                        // Let's follow PDF logic: "showModTime = true" for Manual? 
-                        // In PDF I set showModTime = true for Manual (both edited and not).
-                        // Wait, PDF code:
-                        // if (log.isManual) {
-                        //   if (log.isEdited) { typeLabel='作成済(変更済)'; showModTime=true; }
-                        //   else { typeLabel='作成済'; showModTime=true; } 
-                        // }
-                        // So yes, manual logs show mod time (which is updatedAt).
+                        showModTime = true;
                         typeColor = 'text-blue-600';
                     }
                 } else if (log.isEdited) {
@@ -453,17 +413,17 @@ export const MonitorTable = ({ selectedUsers = [], timeRange = 'daily', customSt
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider">レポート出力</h4>
             <button
-              onClick={handleDownloadPdf}
+              onClick={handleDownloadCsv}
               disabled={!logs || logs.length === 0}
               className={`flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors ${
                 !logs || logs.length === 0
                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
               }`}
-              title={!logs || logs.length === 0 ? "データがありません" : "PDFとしてダウンロード"}
+              title={!logs || logs.length === 0 ? "データがありません" : "CSVとしてダウンロード"}
             >
               <Download size={16} />
-              PDFダウンロード
+              CSVダウンロード
             </button>
           </div>
         </div>

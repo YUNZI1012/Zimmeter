@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Download, History, AlertCircle, Pencil, Square, LogOut } from 'lucide-react';
+import { Settings, Download, History, AlertCircle, Pencil, Square, LogOut, RotateCcw } from 'lucide-react';
 import { getCategoryColor } from './lib/constants';
 import type { Category } from './lib/constants';
 import { api } from './lib/axios';
@@ -10,6 +10,7 @@ import { HistoryModal } from './components/HistoryModal';
 import { EditLogModal } from './components/EditLogModal';
 import { LoginModal } from './components/LoginModal';
 import { CheckStatusModal } from './components/CheckStatusModal';
+import { LeaveConfirmModal } from './components/LeaveConfirmModal';
 import { StatusGuard } from './components/Common/StatusGuard';
 import { TimeDecoration } from './components/Common/TimeDecoration';
 import { TodayHistoryBar } from './components/Common/TodayHistoryBar';
@@ -65,11 +66,25 @@ function ZimmeterApp() {
   const [initialAddCategoryId, setInitialAddCategoryId] = useState<number | null>(null);
   const [hasLeftWork, setHasLeftWork] = useState(false);
   const [historyFilterCategoryId, setHistoryFilterCategoryId] = useState<number | null>(null);
+  
+  // Undo Leave State
+  const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
+  const [canUndoLeave, setCanUndoLeave] = useState(false);
+  const [undoTimeLeft, setUndoTimeLeft] = useState(0);
+  const [lastLeaveDate, setLastLeaveDate] = useState<string>('');
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: userStatus } = useUserStatus(!!uid);
   const { showToast } = useToast();
   const prevUserRef = useRef<typeof userStatus>(undefined);
   const opRateLimitRef = useRef<number>(0);
+
+  // Cleanup timer
+  useEffect(() => {
+    return () => {
+        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+    };
+  }, []);
 
   // Monitor User Info Changes
   useEffect(() => {
@@ -280,11 +295,66 @@ function ZimmeterApp() {
       mutationFn: async () => {
           return api.post('/status/leave', {});
       },
-      onSuccess: () => {
+      onSuccess: (res) => {
           queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
           queryClient.invalidateQueries({ queryKey: ['history', uid] });
           queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+          
+          // Set state
+          setHasLeftWork(true);
+          const date = res.data.date;
+          setLastLeaveDate(date);
+
+          // Persist to localStorage
+          const today = new Date().toLocaleDateString();
+          localStorage.setItem('zimmeter_last_left_date', today);
+          
+          showToast('退社しました。お疲れ様でした。', 'success');
+          setShowIdleAlert(false);
+
+          // Start Undo Timer (15s)
+          setCanUndoLeave(true);
+          setUndoTimeLeft(15);
+          
+          if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+          undoTimerRef.current = setInterval(() => {
+              setUndoTimeLeft(prev => {
+                  if (prev <= 1) {
+                      if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+                      setCanUndoLeave(false);
+                      return 0;
+                  }
+                  return prev - 1;
+              });
+          }, 1000);
+      },
+      onError: () => {
+          showToast('退社処理に失敗しました', 'error');
       }
+  });
+
+  const undoLeaveMutation = useMutation({
+    mutationFn: async () => {
+        // hasLeft: false will clear the leftAt timestamp on backend
+        return api.post('/status/fix', { 
+            date: lastLeaveDate, 
+            hasLeft: false 
+        });
+    },
+    onSuccess: () => {
+        setHasLeftWork(false);
+        setCanUndoLeave(false);
+        setLastLeaveDate('');
+        if (undoTimerRef.current) clearInterval(undoTimerRef.current);
+        
+        localStorage.removeItem('zimmeter_last_left_date');
+        
+        queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+        showToast('退社を取り消しました', 'info');
+    },
+    onError: () => {
+        showToast('取り消しに失敗しました', 'error');
+    }
   });
 
   const handleTaskSwitch = (catId: number) => {
@@ -324,25 +394,15 @@ function ZimmeterApp() {
   };
 
   const handleLeaveWork = () => {
-    if (window.confirm('退社を確定しますか?')) {
-        // Call API
-        leaveWorkMutation.mutate(undefined, {
-            onSuccess: () => {
-                // Set state
-                setHasLeftWork(true);
-                
-                // Persist to localStorage
-                const today = new Date().toLocaleDateString();
-                localStorage.setItem('zimmeter_last_left_date', today);
-                
-                showToast('退社しました。お疲れ様でした。', 'success');
-                setShowIdleAlert(false);
-            },
-            onError: () => {
-                showToast('退社処理に失敗しました', 'error');
-            }
-        });
-    }
+    setIsLeaveConfirmOpen(true);
+  };
+
+  const confirmLeaveWork = () => {
+    leaveWorkMutation.mutate();
+  };
+
+  const handleUndoLeave = () => {
+    undoLeaveMutation.mutate();
   };
 
   const { formattedTime } = useTimer(activeLogQuery.data?.startTime ?? null);
@@ -593,6 +653,12 @@ function ZimmeterApp() {
             uid={uid}
         />
 
+        <LeaveConfirmModal
+            isOpen={isLeaveConfirmOpen}
+            onClose={() => setIsLeaveConfirmOpen(false)}
+            onConfirm={confirmLeaveWork}
+        />
+
         <LoginModal 
             isOpen={showLoginModal}
             onSubmit={handleLogin}
@@ -631,6 +697,22 @@ function ZimmeterApp() {
                     <div className="text-sm text-gray-400">
                         ※明日になると自動的にリセットされます
                     </div>
+
+                    {canUndoLeave && (
+                         <div className="w-full pt-6 border-t border-gray-100 flex flex-col items-center animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <p className="text-sm text-gray-500 mb-3">
+                                間違えて押しましたか？（残り {undoTimeLeft}秒）
+                            </p>
+                            <button
+                                onClick={handleUndoLeave}
+                                disabled={undoLeaveMutation.isPending}
+                                className="flex items-center gap-2 px-6 py-3 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-xl transition-all font-bold hover:shadow-md active:scale-95"
+                            >
+                                <RotateCcw size={18} />
+                                <span>取り消し</span>
+                            </button>
+                         </div>
+                    )}
                 </div>
             </div>
         )}

@@ -5,7 +5,6 @@ import { MonitorTable } from '../components/Admin/MonitorTable';
 import { UserMultiSelectDropdown } from '../components/Admin/UserMultiSelectDropdown';
 import { ArrowLeft, LayoutDashboard, ChevronDown, ChevronUp, Users, FolderOpen, Calendar } from 'lucide-react';
 import { AdminWorkLogCharts } from '../components/Admin/AdminCharts';
-import { TimeDecoration } from '../components/Common/TimeDecoration';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/axios';
 
@@ -245,8 +244,6 @@ export const AdminPage = ({ onBack }: AdminPageProps) => {
           )}
         </div>
       </main>
-
-      <TimeDecoration />
     </div>
   );
 };

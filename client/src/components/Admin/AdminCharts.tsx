@@ -137,7 +137,7 @@ const ChartContent = ({ chartType, isLoading, stats, barData, pieData, timeRange
                 layout="vertical" 
                 verticalAlign="middle" 
                 align="right"
-                wrapperStyle={{ fontSize: '11px', lineHeight: '14px' }}
+                wrapperStyle={{ fontSize: '11px', lineHeight: '14px', color: '#374151' }}
               />
             </PieChart>
           </ResponsiveContainer>
@@ -288,25 +288,57 @@ export const AdminWorkLogCharts = ({
         const category = categories?.find(c => c.name === stat.categoryName);
         const { color: bgClass } = getCategoryColor(category || { name: stat.categoryName });
         
-        let fill = '#cbd5e1';
+        let fill = '#94a3b8'; // Fallback to darker gray (Slate-400)
+
+        const lowerName = stat.categoryName.toLowerCase();
         
-        const colorMap: Record<string, string> = {
-            'bg-white': '#f8fafc',
-            'bg-blue-100': '#60a5fa',
-            'bg-green-100': '#4ade80',
-            'bg-orange-100': '#fb923c',
-            'bg-purple-100': '#c084fc',
-            'bg-pink-100': '#f472b6',
-            'bg-gray-100': '#94a3b8',
-            'bg-teal-50': '#2dd4bf',
-            'bg-slate-800': '#1e293b',
-            'bg-slate-900': '#0f172a',
-        };
-        
-        const bgClassKey = category?.bgColor || bgClass.split(' ').find(c => c.startsWith('bg-'));
-        
-        if (bgClassKey && colorMap[bgClassKey]) {
-            fill = colorMap[bgClassKey];
+        // Name-based Overrides (Priority)
+        if (lowerName.includes('事務')) {
+            fill = '#84cc16'; // Lime-500
+        } else {
+            // Class-based Mapping
+            const colorMap: Record<string, string> = {
+                'bg-white': 'HASH_COLOR',   // Use Hash for default projects
+                'bg-gray-100': '#0891b2',   // Cyan-600
+                'bg-gray-300': '#b91c1c',   // Red-700
+                'bg-blue-100': '#2563eb',   // Blue-600
+                'bg-green-100': '#16a34a',  // Green-600
+                'bg-orange-100': '#ea580c', // Orange-600
+                'bg-purple-100': '#9333ea', // Purple-600
+                'bg-pink-100': '#db2777',   // Pink-600
+                'bg-teal-50': '#0d9488',    // Teal-600
+                'bg-slate-800': '#000000',  // Black
+                'bg-slate-900': '#1e1b4b',  // Indigo-950
+            };
+            
+            const bgClassKey = category?.bgColor || bgClass.split(' ').find(c => c.startsWith('bg-'));
+            
+            if (bgClassKey && colorMap[bgClassKey]) {
+                if (colorMap[bgClassKey] === 'HASH_COLOR') {
+                    // Generate consistent color from name
+                    const palette = [
+                        '#ef4444', // Red-500
+                        '#f97316', // Orange-500
+                        '#f59e0b', // Amber-500
+                        '#10b981', // Emerald-500
+                        '#06b6d4', // Cyan-500
+                        '#3b82f6', // Blue-500
+                        '#6366f1', // Indigo-500
+                        '#8b5cf6', // Violet-500
+                        '#d946ef', // Fuchsia-500
+                        '#f43f5e', // Rose-500
+                        '#14b8a6', // Teal-500
+                        '#0ea5e9', // Sky-500
+                    ];
+                    let hash = 0;
+                    for (let i = 0; i < stat.categoryName.length; i++) {
+                        hash = stat.categoryName.charCodeAt(i) + ((hash << 5) - hash);
+                    }
+                    fill = palette[Math.abs(hash) % palette.length];
+                } else {
+                    fill = colorMap[bgClassKey];
+                }
+            }
         }
 
         return {

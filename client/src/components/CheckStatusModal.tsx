@@ -1,8 +1,9 @@
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Save, RotateCcw, ArrowRight } from 'lucide-react';
 import { api } from '../lib/axios';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../context/ToastContext';
 
 interface CheckStatusModalProps {
   isOpen: boolean;
@@ -19,14 +20,11 @@ interface CheckStatusModalProps {
 
 export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStatusModalProps) => {
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
   const [isInputMode, setIsInputMode] = useState(false);
   const [leaveTime, setLeaveTime] = useState('18:00');
 
   const handleStartFix = () => {
-    // Default to 18:00 if resetting, or keep previous edit? 
-    // Resetting to default makes sense for a fresh open.
-    // But state is preserved if just switching modes? 
-    // Let's just set input mode. leaveTime defaults to '18:00' in useState.
     setIsInputMode(true);
   };
 
@@ -46,11 +44,17 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
       queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
       queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
       queryClient.invalidateQueries({ queryKey: ['history', uid] });
-      queryClient.invalidateQueries({ queryKey: ['monitorLogs'] }); // Also refresh monitor
+      queryClient.invalidateQueries({ queryKey: ['monitorLogs'] });
+      showToast('ステータスを補正しました', 'success');
       onClose();
       setIsInputMode(false);
-      setLeaveTime('18:00'); // Reset
+      setLeaveTime('18:00');
     },
+    onError: (error: any) => {
+        console.error(error);
+        const msg = error.response?.data?.details || '補正に失敗しました。ネットワークを確認してください。';
+        showToast(msg, 'error');
+    }
   });
 
   if (!statusData) return null;
@@ -116,10 +120,11 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
                         <div className="flex gap-3 w-full">
                             <button
                             type="button"
-                            className="flex-1 inline-flex justify-center rounded-lg border border-transparent bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition-colors"
+                            className="flex-1 inline-flex justify-center items-center gap-2 rounded-lg border border-transparent bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition-colors touch-manipulation"
                             onClick={handleStartFix}
                             >
-                            手動補正へ進む
+                            <span>手動補正へ進む</span>
+                            <ArrowRight size={18} />
                             </button>
                         </div>
                     </>
@@ -137,7 +142,7 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
 
                             <input
                                 type="time"
-                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg"
+                                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-lg"
                                 value={leaveTime}
                                 onChange={(e) => setLeaveTime(e.target.value)}
                             />
@@ -150,21 +155,23 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
                             )}
                         </div>
 
-                        <div className="flex gap-3 w-full mt-6">
+                        <div className="flex gap-3 w-full mt-8">
                             <button
                                 type="button"
-                                className="flex-1 inline-flex justify-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none transition-colors"
+                                className="flex-1 inline-flex justify-center items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none transition-colors touch-manipulation"
                                 onClick={() => setIsInputMode(false)}
                             >
-                                戻る
+                                <RotateCcw size={18} />
+                                <span>戻る</span>
                             </button>
                             <button
                                 type="button"
-                                className="flex-1 inline-flex justify-center rounded-lg border border-transparent bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex-1 inline-flex justify-center items-center gap-2 rounded-lg border border-transparent bg-orange-600 px-4 py-3 text-sm font-bold text-white hover:bg-orange-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
                                 onClick={() => fixMutation.mutate()}
                                 disabled={!leaveTime || fixMutation.isPending}
                             >
-                                {fixMutation.isPending ? '処理中...' : '確定する'}
+                                <Save size={18} />
+                                <span>{fixMutation.isPending ? '処理中...' : '確定する'}</span>
                             </button>
                         </div>
                     </>

@@ -343,10 +343,38 @@ router.get('/export/csv', async (req: Request, res: Response) => {
 router.post('/status/leave', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    const dateStr = getJstDateStr(); // Today JST
+    let dateStr = getJstDateStr(); // Today JST (Default)
+
+    const now = new Date();
+    const nowJst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+    const currentHour = nowJst.getUTCHours();
+
+    // Midnight Overtime Logic:
+    // If it's early morning (e.g., < 05:00), check if we should attribute this to Yesterday.
+    if (currentHour < 5) {
+        // Check if there are any logs for Today (JST)
+        const todayJst = new Date(nowJst);
+        todayJst.setUTCHours(0, 0, 0, 0);
+        // Convert back to UTC for DB query
+        const todayStartUtc = new Date(todayJst.getTime() - 9 * 60 * 60 * 1000);
+
+        const logsToday = await prisma.workLog.count({
+            where: {
+                userId: currentUser.id,
+                startTime: { gte: todayStartUtc }
+            }
+        });
+
+        // If NO logs exist for "Today" (since 00:00), assume this leave belongs to "Yesterday"
+        if (logsToday === 0) {
+            const yesterdayJst = new Date(todayJst);
+            yesterdayJst.setDate(yesterdayJst.getDate() - 1);
+            dateStr = yesterdayJst.toISOString().split('T')[0];
+            console.log(`[Leave] Early morning detected (${currentHour}:00). No logs for today. Attributing to Yesterday: ${dateStr}`);
+        }
+    }
 
     // 1. Stop active tasks first
-    const now = new Date();
     const activeLog = await prisma.workLog.findFirst({
       where: {
         userId: currentUser.id,
@@ -372,7 +400,7 @@ router.post('/status/leave', async (req: Request, res: Response) => {
         update: { hasLeft: true, leftAt: now }
     });
 
-    res.json({ success: true });
+    res.json({ success: true, date: dateStr });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to leave work' });
@@ -458,7 +486,7 @@ router.get('/status/check', async (req: Request, res: Response) => {
 router.post('/status/fix', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    const { date, leaveTime } = req.body; // YYYY-MM-DD, leaveTime: ISO String
+    const { date, leaveTime, hasLeft } = req.body; // YYYY-MM-DD, leaveTime: ISO String, hasLeft: boolean (optional)
 
     if (!date) return res.status(400).json({ error: 'Date is required' });
 
@@ -523,20 +551,43 @@ router.post('/status/fix', async (req: Request, res: Response) => {
     }
 
     // 2. Update DailyStatus
+    // Prepare update data
+    const updateData: any = { isFixed: true };
+    const createData: any = { 
+        userId: currentUser.id, 
+        date, 
+        isFixed: true,
+        hasLeft: true, // Default create to true unless specified? 
+        // If creating new status, and hasLeft is explicitly false, we should respect it.
+    };
+
+    if (typeof hasLeft === 'boolean') {
+        updateData.hasLeft = hasLeft;
+        createData.hasLeft = hasLeft;
+        if (hasLeft === false) {
+            updateData.leftAt = null; // Clear timestamp
+            createData.leftAt = null;
+        } else {
+            if (leftAtDate) {
+                updateData.leftAt = leftAtDate;
+                createData.leftAt = leftAtDate;
+            }
+        }
+    } else {
+        // Default behavior (Backward compatibility)
+        // If leaveTime is present, assume hasLeft = true
+        updateData.hasLeft = true;
+        createData.hasLeft = true;
+        if (leftAtDate) {
+             updateData.leftAt = leftAtDate;
+             createData.leftAt = leftAtDate;
+        }
+    }
+
     await prisma.dailyStatus.upsert({
         where: { userId_date: { userId: currentUser.id, date } },
-        create: { 
-            userId: currentUser.id, 
-            date, 
-            isFixed: true, 
-            hasLeft: true, 
-            leftAt: leftAtDate 
-        }, 
-        update: { 
-            isFixed: true,
-            hasLeft: true, // Force true as fixed
-            ...(leftAtDate ? { leftAt: leftAtDate } : {})
-        }
+        create: createData,
+        update: updateData
     });
 
     res.json({ success: true });

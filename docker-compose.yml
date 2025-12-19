@@ -33,9 +33,9 @@ services:
     ports:
       - "9002:9002"
     environment:
-      - VITE_API_TARGET=http://server:9102
-    depends_on:
-      - server
+      - VITE_API_TARGET=http://host.docker.internal:9102
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./client:/app
       - /app/node_modules

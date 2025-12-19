@@ -340,6 +340,12 @@ function ZimmeterApp() {
         // Refresh data
         queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
         queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+    },
+    onError: () => {
+        showToast('業務再開に失敗しました', 'error');
+    },
+    onSettled: () => {
+        // Re-enable UI if needed
     }
   });
 

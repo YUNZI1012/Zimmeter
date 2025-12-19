@@ -412,11 +412,24 @@ router.post('/status/leave', async (req: Request, res: Response) => {
 router.post('/status/resume', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    const dateStr = getJstDateStr(); 
-    await prisma.dailyStatus.update({
-        where: { userId_date: { userId: currentUser.id, date: dateStr } },
-        data: { hasLeft: false }
+
+    // Clear the most recent "Left" status.
+    // This handles cases where leave was attributed to yesterday (early morning logic),
+    // and avoids throwing when today's DailyStatus doesn't exist.
+    const lastLeftStatus = await prisma.dailyStatus.findFirst({
+        where: {
+            userId: currentUser.id,
+            hasLeft: true,
+        },
+        orderBy: { date: 'desc' },
     });
+
+    if (lastLeftStatus) {
+      await prisma.dailyStatus.update({
+          where: { userId_date: { userId: currentUser.id, date: lastLeftStatus.date } },
+          data: { hasLeft: false, leftAt: null },
+      });
+    }
     res.json({ success: true });
   } catch (error) {
     console.error(error);

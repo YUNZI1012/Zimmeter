@@ -389,8 +389,8 @@ function ZimmeterApp() {
 
     // Check if there is an active task running
     if (activeLogQuery.data) {
-      showToast('進行中の項目を停止してください', 'error');
-      return;
+      const ok = window.confirm('現在進行中のタスクを終了し、新しいタスクを開始しますか？');
+      if (!ok) return;
     }
 
     if (switchMutation.isPending) return;

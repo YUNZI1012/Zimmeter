@@ -338,6 +338,51 @@ router.get('/export/csv', async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/status/today
+// 今日の退社状態を取得（ページリロード時の状態復元用）
+router.get('/status/today', async (req: Request, res: Response) => {
+  try {
+    const currentUser = getUser(req);
+    
+    // Get today's date string (JST)
+    const todayStr = getJstDateStr();
+    
+    // Also check yesterday for early morning case
+    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+    const currentHour = nowJst.getUTCHours();
+    
+    let hasLeft = false;
+    
+    // Check today's status first
+    const todayStatus = await prisma.dailyStatus.findUnique({
+      where: { userId_date: { userId: currentUser.id, date: todayStr } }
+    });
+    
+    if (todayStatus?.hasLeft) {
+      hasLeft = true;
+    } else if (currentHour < 5) {
+      // Early morning: also check yesterday's status
+      // (leave might have been attributed to yesterday)
+      const yesterdayJst = new Date(nowJst);
+      yesterdayJst.setDate(yesterdayJst.getDate() - 1);
+      const yesterdayStr = yesterdayJst.toISOString().split('T')[0];
+      
+      const yesterdayStatus = await prisma.dailyStatus.findUnique({
+        where: { userId_date: { userId: currentUser.id, date: yesterdayStr } }
+      });
+      
+      if (yesterdayStatus?.hasLeft) {
+        hasLeft = true;
+      }
+    }
+    
+    res.json({ hasLeft, date: todayStr });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to get today status' });
+  }
+});
+
 // POST /api/status/leave
 // 退社処理: 今日のステータスを「退社済」にする
 router.post('/status/leave', async (req: Request, res: Response) => {

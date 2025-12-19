@@ -101,7 +101,7 @@ function ZimmeterApp() {
     prevUserRef.current = userStatus;
   }, [userStatus, showToast]);
 
-  // Initialize UID and Left Work State
+  // Initialize UID
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const pUid = params.get('uid');
@@ -113,15 +113,31 @@ function ZimmeterApp() {
       if (stored) setUid(stored);
       else setShowLoginModal(true);
     }
-
-    // Check if user has left work today (Local check for UI immediate feedback)
-    // Real status is checked via API below
-    const lastLeftDate = localStorage.getItem('zimmeter_last_left_date');
-    const today = new Date().toLocaleDateString();
-    if (lastLeftDate === today) {
-        setHasLeftWork(true);
-    }
   }, []);
+
+  // Fetch today's leave status from server (authoritative source)
+  const todayStatusQuery = useQuery({
+    queryKey: ['todayStatus', uid],
+    queryFn: async () => {
+      const res = await api.get<{ hasLeft: boolean; date: string }>('/status/today');
+      return res.data;
+    },
+    enabled: !!uid,
+    staleTime: 1000 * 60, // Cache for 1 minute
+  });
+
+  // Sync hasLeftWork state with server response
+  useEffect(() => {
+    if (todayStatusQuery.data) {
+      setHasLeftWork(todayStatusQuery.data.hasLeft);
+      // Also sync localStorage for immediate feedback on next load
+      if (todayStatusQuery.data.hasLeft) {
+        localStorage.setItem('zimmeter_last_left_date', new Date().toLocaleDateString());
+      } else {
+        localStorage.removeItem('zimmeter_last_left_date');
+      }
+    }
+  }, [todayStatusQuery.data]);
 
   const handleLogin = (username: string) => {
     setUid(username);
@@ -293,6 +309,7 @@ function ZimmeterApp() {
           queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
           queryClient.invalidateQueries({ queryKey: ['history', uid] });
           queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+          queryClient.invalidateQueries({ queryKey: ['todayStatus', uid] });
           
           // Set state
           setHasLeftWork(true);
@@ -340,6 +357,7 @@ function ZimmeterApp() {
         // Refresh data
         queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
         queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+        queryClient.invalidateQueries({ queryKey: ['todayStatus', uid] });
     },
     onError: () => {
         showToast('業務再開に失敗しました', 'error');

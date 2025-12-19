@@ -69,7 +69,6 @@ function ZimmeterApp() {
   
   // Undo Leave State
   const [isLeaveConfirmOpen, setIsLeaveConfirmOpen] = useState(false);
-  const [lastLeaveDate, setLastLeaveDate] = useState<string>('');
 
   const { data: userStatus } = useUserStatus(!!uid);
   const { showToast } = useToast();

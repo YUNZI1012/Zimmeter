@@ -374,6 +374,28 @@ function ZimmeterApp() {
     }
   });
 
+  const resumeWorkMutation = useMutation({
+    mutationFn: async () => {
+        return api.post('/status/resume', {});
+    },
+    onSuccess: () => {
+        // Unlock screen immediately
+        setHasLeftWork(false);
+        localStorage.removeItem('zimmeter_last_left_date');
+        showToast('業務を再開しました', 'success');
+        
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['activeLog', uid] });
+        queryClient.invalidateQueries({ queryKey: ['statusCheck', uid] });
+    }
+  });
+
+  const handleResumeWork = () => {
+    if (window.confirm('退社を取り消して業務を再開しますか？')) {
+        resumeWorkMutation.mutate();
+    }
+  };
+
   const handleTaskSwitch = (catId: number) => {
     // Global Rate Limit Check
     const now = Date.now();
@@ -711,7 +733,20 @@ function ZimmeterApp() {
                         退社処理が完了しました。<br/>
                         今日も一日お疲れ様でした。
                     </p>
-                    <div className="text-sm text-gray-400">
+
+                    {!canUndoLeave && (
+                        <div className="mt-4 flex flex-col items-center gap-4">
+                            <button
+                                onClick={handleResumeWork}
+                                disabled={resumeWorkMutation.isPending}
+                                className="px-6 py-2 bg-white border border-gray-300 text-gray-600 rounded-full hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium"
+                            >
+                                {resumeWorkMutation.isPending ? '処理中...' : '業務を再開する（退社取消）'}
+                            </button>
+                        </div>
+                    )}
+                    
+                    <div className="text-sm text-gray-400 mt-6">
                         ※明日になると自動的にリセットされます
                     </div>
 

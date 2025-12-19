@@ -407,6 +407,23 @@ router.post('/status/leave', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/status/resume
+// 退社取り消し（業務再開）: 今日のステータスの「退社済」を解除する
+router.post('/status/resume', async (req: Request, res: Response) => {
+  try {
+    const currentUser = getUser(req);
+    const dateStr = getJstDateStr(); 
+    await prisma.dailyStatus.update({
+        where: { userId_date: { userId: currentUser.id, date: dateStr } },
+        data: { hasLeft: false }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // GET /api/status/check
 // 昨日（または指定日）のステータスチェック
 router.get('/status/check', async (req: Request, res: Response) => {

@@ -92,7 +92,7 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
                   </div>
                   
                   <Dialog.Title as="h3" className="text-lg font-bold leading-6 text-gray-900 mb-2">
-                    前日の業務ステータス確認
+                    業務ステータス確認
                   </Dialog.Title>
 
                   {!isInputMode ? (
@@ -114,7 +114,7 @@ export const CheckStatusModal = ({ isOpen, onClose, statusData, uid }: CheckStat
                         </div>
 
                         <p className="text-sm text-gray-600 mb-6">
-                            昨日の記録を「完了」として補正しますか？
+                            対象日の記録を「完了」として補正しますか？
                         </p>
 
                         <div className="flex gap-3 w-full">

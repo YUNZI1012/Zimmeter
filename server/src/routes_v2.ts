@@ -483,72 +483,120 @@ router.post('/status/resume', async (req: Request, res: Response) => {
 });
 
 // GET /api/status/check
-// 昨日（または指定日）のステータスチェック
+// 未退社・未停止タスクなど、補正が必要な日を自動検出
 router.get('/status/check', async (req: Request, res: Response) => {
   try {
     const currentUser = getUser(req);
-    
-    // Yesterday JST
-    const nowJst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-    const ystJst = new Date(nowJst.getTime() - 24 * 60 * 60 * 1000);
-    const yesterdayStr = ystJst.toISOString().split('T')[0];
 
-    const status = await prisma.dailyStatus.findUnique({
-        where: { userId_date: { userId: currentUser.id, date: yesterdayStr } }
-    });
+    const now = new Date();
+    const nowJst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
 
-    // Check for unstopped tasks started BEFORE today (JST 00:00)
     const todayStartJst = new Date(nowJst);
-    todayStartJst.setUTCHours(0,0,0,0);
-    // Convert back to UTC for DB query
+    todayStartJst.setUTCHours(0, 0, 0, 0);
     const todayStartUtc = new Date(todayStartJst.getTime() - 9 * 60 * 60 * 1000);
 
+    const fallbackYesterdayJst = new Date(nowJst.getTime() - 24 * 60 * 60 * 1000);
+    const fallbackDateStr = fallbackYesterdayJst.toISOString().split('T')[0];
+
+    // Priority 1: Unstopped task started before today (JST)
     const unstoppedTask = await prisma.workLog.findFirst({
-        where: {
-            userId: currentUser.id,
-            endTime: null,
-            startTime: { lt: todayStartUtc }
-        }
+      where: {
+        userId: currentUser.id,
+        endTime: null,
+        startTime: { lt: todayStartUtc },
+      },
+      orderBy: { startTime: 'asc' },
+      select: { startTime: true },
     });
 
-    // Check if any logs exist for yesterday (to skip fix for holidays/new users)
-    // yesterdayStr is YYYY-MM-DD
-    const [yYear, yMonth, yDay] = yesterdayStr.split('-').map(Number);
-    // JST 00:00:00 = UTC Previous Day 15:00:00
-    const yesterdayStartJst = new Date(Date.UTC(yYear, yMonth - 1, yDay, -9, 0, 0, 0));
-    // JST 23:59:59 = UTC Today 14:59:59
-    const yesterdayEndJst = new Date(Date.UTC(yYear, yMonth - 1, yDay, 14, 59, 59, 999));
+    if (unstoppedTask) {
+      const targetDateStr = getJstDateStr(unstoppedTask.startTime);
+      const status = await prisma.dailyStatus.findUnique({
+        where: { userId_date: { userId: currentUser.id, date: targetDateStr } },
+      });
+      const hasLeft = status?.hasLeft || false;
+      const isFixed = status?.isFixed || false;
+      const needsFix = !isFixed;
 
-    const yesterdayLogCount = await prisma.workLog.count({
-        where: {
-            userId: currentUser.id,
-            startTime: {
-                gte: yesterdayStartJst,
-                lte: yesterdayEndJst
-            }
-        }
-    });
-    
-    const hasYesterdayLogs = yesterdayLogCount > 0;
-
-    const hasLeft = status?.hasLeft || false;
-    const isFixed = status?.isFixed || false;
-    
-    // Needs fix if:
-    // 1. Has unstopped task (Critical)
-    // OR
-    // 2. Has logs yesterday BUT hasn't left (Forgot to click leave)
-    // AND
-    // 3. Not fixed yet
-    // If no logs yesterday and no unstopped task, we assume it was a holiday or new user -> No fix needed.
-    const needsFix = !isFixed && (!!unstoppedTask || (hasYesterdayLogs && !hasLeft));
-
-    res.json({
-        date: yesterdayStr,
+      return res.json({
+        date: targetDateStr,
         hasLeft,
-        hasUnstoppedTasks: !!unstoppedTask,
+        hasUnstoppedTasks: true,
         needsFix,
-        isFixed
+        isFixed,
+      });
+    }
+
+    // Priority 2: Find the most recent day (before today) with logs but without leave record
+    const lookbackDays = 30;
+    const rangeStartUtc = new Date(todayStartUtc.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
+
+    const logs = await prisma.workLog.findMany({
+      where: {
+        userId: currentUser.id,
+        startTime: {
+          gte: rangeStartUtc,
+          lt: todayStartUtc,
+        },
+      },
+      orderBy: { startTime: 'desc' },
+      select: { startTime: true },
+    });
+
+    const dates: string[] = [];
+    const seen = new Set<string>();
+    for (const log of logs) {
+      const d = getJstDateStr(log.startTime);
+      if (!seen.has(d)) {
+        seen.add(d);
+        dates.push(d);
+      }
+    }
+
+    if (dates.length === 0) {
+      return res.json({
+        date: fallbackDateStr,
+        hasLeft: false,
+        hasUnstoppedTasks: false,
+        needsFix: false,
+        isFixed: false,
+      });
+    }
+
+    const statuses = await prisma.dailyStatus.findMany({
+      where: {
+        userId: currentUser.id,
+        date: { in: dates },
+      },
+      select: { date: true, hasLeft: true, isFixed: true },
+    });
+
+    const statusMap = new Map(statuses.map(s => [s.date, s] as const));
+
+    for (const date of dates) {
+      const s = statusMap.get(date);
+      const hasLeft = s?.hasLeft || false;
+      const isFixed = s?.isFixed || false;
+      if (!isFixed && !hasLeft) {
+        return res.json({
+          date,
+          hasLeft,
+          hasUnstoppedTasks: false,
+          needsFix: true,
+          isFixed,
+        });
+      }
+    }
+
+    // No fix needed
+    const latestDate = dates[0];
+    const latestStatus = statusMap.get(latestDate);
+    res.json({
+      date: latestDate,
+      hasLeft: latestStatus?.hasLeft || false,
+      hasUnstoppedTasks: false,
+      needsFix: false,
+      isFixed: latestStatus?.isFixed || false,
     });
   } catch (error) {
     console.error(error);
